@@ -44,7 +44,7 @@ The user wants to build a miniapp to display analytics about their creator earni
 
 # Project Status Board
 
-- [ ] Environment Setup
+- [x] Environment Setup
 - [ ] Zora API Integration
 - [ ] Rodeo Club API Integration
 - [ ] Data Computations (total, average)
@@ -56,14 +56,23 @@ The user wants to build a miniapp to display analytics about their creator earni
 
 # Current Status / Progress Tracking
 
-- No tasks started yet.
+- Environment Setup completed:
+  - Cloned the `my-mini-zora` repo successfully
+  - Installed dependencies with npm install
+  - Started the development server, accessible on localhost:3000
+  - Examined the existing code structure and found:
+    - The app uses Next.js with MiniKit/OnchainKit
+    - Existing Zora integration for fetching tokens by Zora handle
+    - No existing analytics functionality
 
 # Executor's Feedback or Assistance Requests
 
-- None at present.
+- I've completed the first task of setting up the environment and examining the codebase. The app is running locally, and I can proceed to the API integration for analytics data.
+- Before proceeding to the Zora API Integration task, I should research more about the Zora API to understand how to fetch earnings and transaction data, as well as determine what API endpoints are available for Rodeo Club.
 
 # Lessons
 
 - Include debug logs in output for easier troubleshooting.
 - Always review the file before editing.
-- Run `npm audit` if any vulnerabilities appear. 
+- Run `npm audit` if any vulnerabilities appear.
+- There were some package version warnings during installation, but no critical issues that would prevent the app from running. 
