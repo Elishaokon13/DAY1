@@ -38,7 +38,7 @@ export type CreatorEarningsResponse = {
 
 export async function GET(req: NextRequest) {
   const handle = req.nextUrl.searchParams.get('handle')
-  const timeframe = req.nextUrl.searchParams.get('timeframe') || 'all' // all, week, month, year
+  // timeframe parameter is reserved for future implementation
 
   if (!handle) {
     return NextResponse.json({ error: 'Missing Zora handle' }, { status: 400 })
@@ -49,10 +49,9 @@ export async function GET(req: NextRequest) {
 
   try {
     // Fetch profile data from Zora
-    const [profileRes, balancesRes] = await Promise.all([
-      getProfile({ identifier: cleanHandle }),
-      getProfileBalances({ identifier: cleanHandle }),
-    ])
+    const profileRes = await getProfile({ identifier: cleanHandle })
+    // Also fetch balances for future implementation
+    await getProfileBalances({ identifier: cleanHandle })
 
     // Extract profile information
     const profileData = profileRes?.data 

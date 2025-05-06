@@ -1,6 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { CreatorEarningsResponse } from '../creator-earnings/route'
-import { RodeoEarningsResponse } from '../rodeo-earnings/route'
 
 export type CombinedAnalyticsResponse = {
   // Overall earnings
@@ -52,6 +50,12 @@ export type CombinedAnalyticsResponse = {
   }
 }
 
+// Define collector interface for type safety
+interface Collector {
+  address: string
+  isTrader: boolean
+}
+
 export async function GET(req: NextRequest) {
   const zoraHandle = req.nextUrl.searchParams.get('zora')
   const rodeoUsername = req.nextUrl.searchParams.get('rodeo')
@@ -88,7 +92,7 @@ export async function GET(req: NextRequest) {
     const traderAddresses = new Set<string>()
     
     if (zoraData?.collectors) {
-      zoraData.collectors.forEach((collector: any) => {
+      zoraData.collectors.forEach((collector: Collector) => {
         collectorAddresses.add(collector.address)
         if (collector.isTrader) {
           traderAddresses.add(collector.address)
@@ -97,7 +101,7 @@ export async function GET(req: NextRequest) {
     }
     
     if (rodeoData?.collectors) {
-      rodeoData.collectors.forEach((collector: any) => {
+      rodeoData.collectors.forEach((collector: Collector) => {
         collectorAddresses.add(collector.address)
         if (collector.isTrader) {
           traderAddresses.add(collector.address)
@@ -126,11 +130,13 @@ export async function GET(req: NextRequest) {
           timeSeriesData.daily[date] = { earnings: 0, count: 0 }
         }
         // For this example, we're estimating earnings by dividing total by count
-        const dailyEarnings = zoraTotalEarnings * (count as number) / 
-          Object.values(zoraData.salesByTimeframe.daily).reduce((a, b) => (a as number) + (b as number), 0)
+        const values = Object.values(zoraData.salesByTimeframe.daily) as number[]
+        const sumValues = values.reduce((a, b) => a + b, 0)
+        
+        const dailyEarnings = zoraTotalEarnings * (Number(count)) / sumValues
         
         timeSeriesData.daily[date].earnings += dailyEarnings
-        timeSeriesData.daily[date].count += count as number
+        timeSeriesData.daily[date].count += Number(count)
       })
       
       // Process weekly data
@@ -138,11 +144,13 @@ export async function GET(req: NextRequest) {
         if (!timeSeriesData.weekly[week]) {
           timeSeriesData.weekly[week] = { earnings: 0, count: 0 }
         }
-        const weeklyEarnings = zoraTotalEarnings * (count as number) / 
-          Object.values(zoraData.salesByTimeframe.weekly).reduce((a, b) => (a as number) + (b as number), 0)
+        const values = Object.values(zoraData.salesByTimeframe.weekly) as number[]
+        const sumValues = values.reduce((a, b) => a + b, 0)
+        
+        const weeklyEarnings = zoraTotalEarnings * (Number(count)) / sumValues
         
         timeSeriesData.weekly[week].earnings += weeklyEarnings
-        timeSeriesData.weekly[week].count += count as number
+        timeSeriesData.weekly[week].count += Number(count)
       })
       
       // Process monthly data
@@ -150,11 +158,13 @@ export async function GET(req: NextRequest) {
         if (!timeSeriesData.monthly[month]) {
           timeSeriesData.monthly[month] = { earnings: 0, count: 0 }
         }
-        const monthlyEarnings = zoraTotalEarnings * (count as number) / 
-          Object.values(zoraData.salesByTimeframe.monthly).reduce((a, b) => (a as number) + (b as number), 0)
+        const values = Object.values(zoraData.salesByTimeframe.monthly) as number[]
+        const sumValues = values.reduce((a, b) => a + b, 0)
+        
+        const monthlyEarnings = zoraTotalEarnings * (Number(count)) / sumValues
         
         timeSeriesData.monthly[month].earnings += monthlyEarnings
-        timeSeriesData.monthly[month].count += count as number
+        timeSeriesData.monthly[month].count += Number(count)
       })
     }
     
@@ -165,11 +175,13 @@ export async function GET(req: NextRequest) {
         if (!timeSeriesData.daily[date]) {
           timeSeriesData.daily[date] = { earnings: 0, count: 0 }
         }
-        const dailyEarnings = rodeoTotalEarnings * (count as number) / 
-          Object.values(rodeoData.postsByTimeframe.daily).reduce((a, b) => (a as number) + (b as number), 0)
+        const values = Object.values(rodeoData.postsByTimeframe.daily) as number[]
+        const sumValues = values.reduce((a, b) => a + b, 0)
+        
+        const dailyEarnings = rodeoTotalEarnings * (Number(count)) / sumValues
         
         timeSeriesData.daily[date].earnings += dailyEarnings
-        timeSeriesData.daily[date].count += count as number
+        timeSeriesData.daily[date].count += Number(count)
       })
       
       // Process weekly data
@@ -177,11 +189,13 @@ export async function GET(req: NextRequest) {
         if (!timeSeriesData.weekly[week]) {
           timeSeriesData.weekly[week] = { earnings: 0, count: 0 }
         }
-        const weeklyEarnings = rodeoTotalEarnings * (count as number) / 
-          Object.values(rodeoData.postsByTimeframe.weekly).reduce((a, b) => (a as number) + (b as number), 0)
+        const values = Object.values(rodeoData.postsByTimeframe.weekly) as number[]
+        const sumValues = values.reduce((a, b) => a + b, 0)
+        
+        const weeklyEarnings = rodeoTotalEarnings * (Number(count)) / sumValues
         
         timeSeriesData.weekly[week].earnings += weeklyEarnings
-        timeSeriesData.weekly[week].count += count as number
+        timeSeriesData.weekly[week].count += Number(count)
       })
       
       // Process monthly data
@@ -189,11 +203,13 @@ export async function GET(req: NextRequest) {
         if (!timeSeriesData.monthly[month]) {
           timeSeriesData.monthly[month] = { earnings: 0, count: 0 }
         }
-        const monthlyEarnings = rodeoTotalEarnings * (count as number) / 
-          Object.values(rodeoData.postsByTimeframe.monthly).reduce((a, b) => (a as number) + (b as number), 0)
+        const values = Object.values(rodeoData.postsByTimeframe.monthly) as number[]
+        const sumValues = values.reduce((a, b) => a + b, 0)
+        
+        const monthlyEarnings = rodeoTotalEarnings * (Number(count)) / sumValues
         
         timeSeriesData.monthly[month].earnings += monthlyEarnings
-        timeSeriesData.monthly[month].count += count as number
+        timeSeriesData.monthly[month].count += Number(count)
       })
     }
     

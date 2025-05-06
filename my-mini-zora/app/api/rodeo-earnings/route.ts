@@ -40,7 +40,7 @@ export type RodeoEarningsResponse = {
 
 export async function GET(req: NextRequest) {
   const username = req.nextUrl.searchParams.get('username')
-  const timeframe = req.nextUrl.searchParams.get('timeframe') || 'all' // all, week, month, year
+  // timeframe parameter is reserved for future implementation
 
   if (!username) {
     return NextResponse.json({ error: 'Missing Rodeo username' }, { status: 400 })
