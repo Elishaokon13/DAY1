@@ -1,21 +1,22 @@
 import { NextRequest } from 'next/server';
 import { GET } from '../analytics/route';
 
-// Create a type for the mocked response
-interface MockNextResponse {
-  body: {
-    error?: string;
-    totalEarnings?: string;
-    totalCollectors?: number;
-    totalTraders?: number;
-    platforms?: {
-      zora: any;
-      rodeo: any;
-    };
-    [key: string]: any;
-  };
-  status: number;
-  json: () => Promise<any>;
+// Define types for test data
+interface ZoraPlatformData {
+  totalEarnings: string;
+  averageEarning: string;
+  collectors: number;
+  traders: number;
+  salesByTimeframe: Record<string, Record<string, number>>;
+}
+
+interface RodeoPlatformData {
+  totalEarnings: string;
+  averageEarning: string;
+  totalPosts: number;
+  collectors: number;
+  traders: number;
+  postsByTimeframe: Record<string, Record<string, number>>;
 }
 
 // Mock global fetch
@@ -30,7 +31,6 @@ jest.mock('next/server', () => {
       json: jest.fn().mockImplementation((body, options) => ({
         body,
         status: options?.status || 200,
-        json: () => Promise.resolve(body)
       })),
     },
   };
@@ -45,7 +45,7 @@ describe('Analytics API', () => {
     // Create a mock request without any params
     const req = new NextRequest(new URL('http://localhost/api/analytics'));
     
-    const response = await GET(req) as MockNextResponse;
+    const response = await GET(req) as unknown as { body: { error: string }, status: number };
     
     // Check that the response contains an error message
     expect(response.body).toHaveProperty('error');
@@ -80,7 +80,14 @@ describe('Analytics API', () => {
     // Create a mock request with a Zora handle
     const req = new NextRequest(new URL('http://localhost/api/analytics?zora=test-zora'));
     
-    const response = await GET(req) as MockNextResponse;
+    const response = await GET(req) as unknown as { 
+      body: { 
+        totalEarnings: string, 
+        platforms: { 
+          zora: ZoraPlatformData 
+        } 
+      } 
+    };
     
     // Check that the Zora API was called with the correct parameters
     expect(global.fetch).toHaveBeenCalledWith(
@@ -131,7 +138,17 @@ describe('Analytics API', () => {
     // Create a mock request with both handles
     const req = new NextRequest(new URL('http://localhost/api/analytics?zora=test-zora&rodeo=test-rodeo'));
     
-    const response = await GET(req) as MockNextResponse;
+    const response = await GET(req) as unknown as { 
+      body: { 
+        totalEarnings: string, 
+        platforms: { 
+          zora: ZoraPlatformData, 
+          rodeo: RodeoPlatformData
+        },
+        totalCollectors: number,
+        totalTraders: number
+      } 
+    };
     
     // Check that both APIs were called with the correct parameters
     expect(global.fetch).toHaveBeenCalledWith(
@@ -160,7 +177,7 @@ describe('Analytics API', () => {
     // Create a mock request
     const req = new NextRequest(new URL('http://localhost/api/analytics?zora=test-zora'));
     
-    const response = await GET(req) as MockNextResponse;
+    const response = await GET(req) as unknown as { body: { error: string, totalEarnings: string } };
     
     // Check that error response is correctly formatted
     expect(response.body).toHaveProperty('error');

@@ -1,4 +1,5 @@
 import React from 'react';
+import Image from 'next/image';
 import { StatCard } from './StatCard';
 import { EarningsChart } from './EarningsChart';
 import { CollectorTraderChart } from './CollectorTraderChart';
@@ -87,11 +88,13 @@ export function Dashboard({ analyticsData }: DashboardProps) {
       {user && (
         <div className="flex items-center space-x-4 mb-6">
           {user.profileImage && (
-            <div className="w-14 h-14 rounded-full overflow-hidden">
-              <img 
+            <div className="w-14 h-14 rounded-full overflow-hidden relative">
+              <Image 
                 src={user.profileImage} 
                 alt={user.displayName || 'Creator'} 
-                className="w-full h-full object-cover"
+                fill={true}
+                sizes="56px"
+                className="object-cover"
               />
             </div>
           )}

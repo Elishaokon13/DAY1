@@ -14,6 +14,31 @@ interface CollectorTraderChartProps {
   className?: string;
 }
 
+// Define interface for pie chart data
+interface PieChartData {
+  name: string;
+  value: number;
+}
+
+// Define interface for label props
+interface LabelProps {
+  cx: number;
+  cy: number;
+  midAngle: number;
+  innerRadius: number;
+  outerRadius: number;
+  percent: number;
+}
+
+// Define interface for tooltip props
+interface CustomTooltipProps {
+  active?: boolean;
+  payload?: Array<{
+    name: string;
+    value: number;
+  }>;
+}
+
 export function CollectorTraderChart({
   totalCollectors,
   totalTraders,
@@ -22,7 +47,7 @@ export function CollectorTraderChart({
   // Calculate pure collectors (collectors who aren't traders)
   const pureCollectors = totalCollectors - totalTraders;
   
-  const data = [
+  const data: PieChartData[] = [
     { name: 'Collectors', value: pureCollectors },
     { name: 'Traders', value: totalTraders },
   ];
@@ -36,7 +61,7 @@ export function CollectorTraderChart({
     innerRadius,
     outerRadius,
     percent,
-  }: any) => {
+  }: LabelProps) => {
     const radius = innerRadius + (outerRadius - innerRadius) * 0.5;
     const x = cx + radius * Math.cos(-midAngle * Math.PI / 180);
     const y = cy + radius * Math.sin(-midAngle * Math.PI / 180);
@@ -57,7 +82,7 @@ export function CollectorTraderChart({
   };
   
   // Custom tooltip
-  const CustomTooltip = ({ active, payload }: any) => {
+  const CustomTooltip = ({ active, payload }: CustomTooltipProps) => {
     if (active && payload && payload.length) {
       return (
         <div className="bg-[var(--app-card-background)] p-2 border border-[var(--app-border)] rounded-md text-xs">

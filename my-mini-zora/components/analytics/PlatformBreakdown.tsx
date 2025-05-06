@@ -27,6 +27,17 @@ interface PlatformBreakdownProps {
   className?: string;
 }
 
+// Interface for tooltip props
+interface CustomTooltipProps {
+  active?: boolean;
+  payload?: Array<{
+    name: string;
+    value: number;
+    color: string;
+  }>;
+  label?: string;
+}
+
 export function PlatformBreakdown({ zora, rodeo, className = '' }: PlatformBreakdownProps) {
   // Format data for the earnings comparison chart
   const earningsData = [
@@ -57,12 +68,12 @@ export function PlatformBreakdown({ zora, rodeo, className = '' }: PlatformBreak
   ];
 
   // Custom tooltip
-  const CustomTooltip = ({ active, payload, label }: any) => {
+  const CustomTooltip = ({ active, payload, label }: CustomTooltipProps) => {
     if (active && payload && payload.length) {
       return (
         <div className="bg-[var(--app-card-background)] p-3 border border-[var(--app-border)] rounded-md text-xs">
           <p className="font-bold mb-1">{label}</p>
-          {payload.map((entry: any, index: number) => (
+          {payload.map((entry, index) => (
             <p key={`tooltip-${index}`} style={{ color: entry.color }}>
               {`${entry.name}: ${entry.value.toFixed(2)} ${entry.name === 'Earnings' || entry.name === 'Average' ? 'ETH' : ''}`}
             </p>
