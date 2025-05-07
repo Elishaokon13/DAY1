@@ -61,6 +61,34 @@ type Token = {
   transfers: TokenTransfer[]
 }
 
+// Define types for Zora API responses
+type CoinBalance = {
+  balance: string
+  id: string
+  coin?: {
+    id: string
+    name: string
+    description: string
+    address: string
+    symbol: string
+    totalSupply: string
+    totalVolume: string
+    volume24h: string
+    uniqueHolders: number
+  }
+}
+
+type CoinBalancesResponse = {
+  count: number
+  edges: Array<{
+    node: CoinBalance
+  }>
+  pageInfo: {
+    hasNextPage: boolean
+    endCursor?: string
+  }
+}
+
 // Function to fetch Zora price from DexScreener
 async function getZoraPrice(): Promise<number> {
   try {
@@ -101,24 +129,25 @@ async function getTokenTransfers(address: string) {
     })
 
     const profile = response.data?.profile
-    console.log(`Found ${profile?.coinBalances?.length || 0} coin balances`)
+    const balances = profile?.coinBalances as CoinBalancesResponse
+    console.log(`Found ${balances?.edges?.length || 0} coin balances`)
 
-    if (!profile?.coinBalances) {
+    if (!balances?.edges) {
       return []
     }
 
     // Process balances into our token format
-    const tokens = profile.coinBalances.map((balance: any) => ({
-      id: balance.token?.id || '',
-      name: balance.token?.name || '',
-      address: balance.token?.address || '',
-      tokenId: balance.token?.tokenId,
+    const tokens = balances.edges.map(({ node }) => ({
+      id: node.coin?.id || '',
+      name: node.coin?.name || '',
+      address: node.coin?.address || '',
+      tokenId: node.id,
       transfers: [{
-        id: balance.id,
-        timestamp: balance.updatedAt,
+        id: node.id,
+        timestamp: new Date().toISOString(), // Since we don't have timestamp in balance
         type: 'sale',
-        amount: balance.amount,
-        from: balance.owner?.address || '',
+        amount: node.balance,
+        from: address,
         to: address
       }]
     }))
