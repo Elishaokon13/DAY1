@@ -7,6 +7,7 @@ export type Transaction = {
   timestamp: string
   type: 'sale' | 'transfer' | 'mint'
   amount: string
+  amountUSD?: string  // Added USD amount
   tokenAddress: string
   tokenId?: string
   tokenName?: string
@@ -22,7 +23,9 @@ export type CollectorData = {
 
 export type CreatorEarningsResponse = {
   totalEarnings: string
+  totalEarningsUSD?: string  // Added USD total
   averageEarningPerSale: string
+  averageEarningPerSaleUSD?: string  // Added USD average
   salesByTimeframe: {
     daily: { [date: string]: number }
     weekly: { [week: string]: number }
@@ -34,6 +37,64 @@ export type CreatorEarningsResponse = {
   displayName: string
   profileImage?: string | null
   profileHandle?: string | null
+}
+
+// Define types for Zora API responses
+type ZoraCoinBalance = {
+  balance: string
+  id: string
+  coin?: {
+    id: string
+    name: string
+    description: string
+    address: string
+    symbol: string
+    totalSupply: string
+    totalVolume: string
+    volume24h: string
+    createdAt?: string
+    creatorAddress?: string
+    mediaContent?: {
+      mimeType?: string
+      originalUri: string
+      previewImage?: {
+        small: string
+        medium: string
+        blurhash?: string
+      }
+    }
+    uniqueHolders: number
+  }
+}
+
+// Zora token address
+const ZORA_TOKEN_ADDRESS = '0x1111111111166b7FE7bd91427724B487980aFc69'
+
+// Function to fetch Zora price from DexScreener
+async function getZoraPrice(): Promise<number> {
+  try {
+    const response = await fetch(`https://api.dexscreener.com/latest/dex/tokens/${ZORA_TOKEN_ADDRESS}`)
+    const data = await response.json()
+    
+    if (data.pairs && data.pairs.length > 0) {
+      // Get the price from the first pair (usually the most liquid)
+      const price = parseFloat(data.pairs[0].priceUsd)
+      console.log('Fetched Zora price from DexScreener:', price)
+      return price
+    }
+    
+    console.warn('No price data found in DexScreener response')
+    return 0.5 // Fallback price
+  } catch (error) {
+    console.error('Error fetching Zora price:', error)
+    return 0.5 // Fallback price
+  }
+}
+
+// Function to convert Zora amount to USD
+function convertToUSD(zoraAmount: string, priceUsd: number): string {
+  const amount = parseFloat(zoraAmount)
+  return (amount * priceUsd).toFixed(2)
 }
 
 export async function GET(req: NextRequest) {
@@ -48,10 +109,13 @@ export async function GET(req: NextRequest) {
   const cleanHandle = handle.trim().replace(/^@/, '')
 
   try {
+    // Fetch Zora price first
+    const zoraPrice = await getZoraPrice()
+    console.log('Using Zora price:', zoraPrice)
+
     // Fetch profile data from Zora
     const profileRes = await getProfile({ identifier: cleanHandle })
-    // Also fetch balances for future implementation
-    await getProfileBalances({ identifier: cleanHandle })
+    const balancesRes = await getProfileBalances({ identifier: cleanHandle })
 
     // Extract profile information
     const profileData = profileRes?.data 
@@ -69,81 +133,123 @@ export async function GET(req: NextRequest) {
     const profileImage = profileData?.profile?.avatar?.medium || null
     const profileHandle = profileData?.profile?.handle
 
-    // TODO: In a real implementation, we would fetch transaction history
-    // and calculate earnings based on sales data.
-    // For now, we'll use mock data for demonstration.
+    // Get tokens from balances
+    const balanceEdges = balancesRes?.data?.profile?.coinBalances?.edges || []
+    const tokens: ZoraCoinBalance[] = balanceEdges.map(edge => edge.node)
     
-    // Mock data for demonstration
-    const mockTransactions: Transaction[] = [
-      {
-        id: '1',
-        timestamp: '2023-01-01T12:00:00Z',
-        type: 'sale',
-        amount: '0.5',
-        tokenAddress: '0x123...',
-        tokenId: '1',
-        tokenName: 'Artwork #1',
-        buyerAddress: '0xbuyer1',
-        sellerAddress: '0xseller1'
-      },
-      {
-        id: '2',
-        timestamp: '2023-01-15T14:30:00Z',
-        type: 'sale',
-        amount: '1.2',
-        tokenAddress: '0x456...',
-        tokenId: '2',
-        tokenName: 'Artwork #2',
-        buyerAddress: '0xbuyer2',
-        sellerAddress: '0xseller2'
-      },
-      {
-        id: '3',
-        timestamp: '2023-02-05T09:15:00Z',
-        type: 'sale',
-        amount: '0.8',
-        tokenAddress: '0x789...',
-        tokenId: '3',
-        tokenName: 'Artwork #3',
-        buyerAddress: '0xbuyer3',
-        sellerAddress: '0xseller3'
-      }
-    ]
-
-    // Calculate total earnings from mock data
-    const totalEarnings = mockTransactions
-      .filter(tx => tx.type === 'sale')
-      .reduce((sum, tx) => sum + parseFloat(tx.amount), 0)
-      .toString()
-
-    // Calculate average earning per sale
-    const salesCount = mockTransactions.filter(tx => tx.type === 'sale').length
-    const averageEarningPerSale = (totalEarnings && salesCount) 
-      ? (parseFloat(totalEarnings) / salesCount).toString() 
-      : '0'
-
-    // Prepare time-based data
+    // Process tokens data to get sales information
+    const transactions: Transaction[] = []
+    const collectorMap = new Map<string, { tokensPurchased: number, isTrader: boolean }>()
     const salesByTimeframe = {
-      daily: { '2023-01-01': 1, '2023-01-15': 1, '2023-02-05': 1 },
-      weekly: { '2023-W01': 1, '2023-W03': 1, '2023-W06': 1 },
-      monthly: { '2023-01': 2, '2023-02': 1 }
+      daily: {} as { [date: string]: number },
+      weekly: {} as { [week: string]: number },
+      monthly: {} as { [month: string]: number }
     }
 
-    // Mock collector/trader data
-    const collectors: CollectorData[] = [
-      { address: '0xbuyer1', tokensPurchased: 1, isTrader: false },
-      { address: '0xbuyer2', tokensPurchased: 1, isTrader: true },
-      { address: '0xbuyer3', tokensPurchased: 1, isTrader: false }
-    ]
+    console.log('Processing tokens:', tokens.length)
 
+    // Process each token to extract sales data
+    tokens.forEach((token, index) => {
+      console.log(`\nProcessing token ${index + 1}:`)
+      console.log('- Token name:', token.coin?.name)
+      console.log('- Total volume:', token.coin?.totalVolume)
+      console.log('- Created at:', token.coin?.createdAt)
+      
+      if (token.coin?.totalVolume) {
+        const volume = parseFloat(token.coin.totalVolume)
+        console.log('- Parsed volume:', volume)
+        
+        if (volume > 0) {
+          // Use current date if createdAt is not available
+          const saleDate = new Date()
+          const dateKey = saleDate.toISOString().split('T')[0]
+          const weekKey = `${saleDate.getFullYear()}-W${Math.ceil((saleDate.getDate() + saleDate.getDay()) / 7)}`
+          const monthKey = saleDate.toISOString().slice(0, 7)
+
+          console.log('- Sale date:', saleDate.toISOString())
+          console.log('- Date key:', dateKey)
+          console.log('- Week key:', weekKey)
+          console.log('- Month key:', monthKey)
+
+          // Update sales by timeframe
+          salesByTimeframe.daily[dateKey] = (salesByTimeframe.daily[dateKey] || 0) + 1
+          salesByTimeframe.weekly[weekKey] = (salesByTimeframe.weekly[weekKey] || 0) + 1
+          salesByTimeframe.monthly[monthKey] = (salesByTimeframe.monthly[monthKey] || 0) + 1
+
+          // Calculate creator earnings (assuming 5% creator fee)
+          const creatorEarnings = (volume * 0.05).toString()
+          const creatorEarningsUSD = convertToUSD(creatorEarnings, zoraPrice)
+          console.log('- Creator earnings:', creatorEarnings, 'ZORA ($' + creatorEarningsUSD + ')')
+
+          // Add transaction
+          const transaction: Transaction = {
+            id: `${token.coin.address}-${dateKey}`,
+            timestamp: saleDate.toISOString(),
+            type: 'sale' as const,
+            amount: creatorEarnings,
+            amountUSD: creatorEarningsUSD,
+            tokenAddress: token.coin.address,
+            tokenName: token.coin.name,
+            buyerAddress: token.coin.creatorAddress,
+            sellerAddress: token.coin.creatorAddress
+          }
+          transactions.push(transaction)
+          console.log('- Added transaction:', transaction)
+
+          // Update collector data
+          if (token.coin.creatorAddress) {
+            const buyerData = collectorMap.get(token.coin.creatorAddress) || { tokensPurchased: 0, isTrader: false }
+            buyerData.tokensPurchased++
+            collectorMap.set(token.coin.creatorAddress, buyerData)
+            console.log('- Updated collector data:', buyerData)
+          }
+        } else {
+          console.log('- Skipping token: volume is 0 or negative')
+        }
+      } else {
+        console.log('- Skipping token: no total volume data')
+      }
+    })
+
+    // Calculate total earnings
+    const totalEarnings = transactions
+      .reduce((sum, tx) => sum + parseFloat(tx.amount), 0)
+      .toString()
+    const totalEarningsUSD = convertToUSD(totalEarnings, zoraPrice)
+
+    console.log('\nFinal calculations:')
+    console.log('- Total transactions:', transactions.length)
+    console.log('- Total earnings:', totalEarnings, 'ZORA ($' + totalEarningsUSD + ')')
+    console.log('- Sales by timeframe:', salesByTimeframe)
+
+    // Calculate average earning per sale
+    const salesCount = transactions.length
+    const averageEarningPerSale = salesCount > 0 
+      ? (parseFloat(totalEarnings) / salesCount).toString() 
+      : '0'
+    const averageEarningPerSaleUSD = convertToUSD(averageEarningPerSale, zoraPrice)
+    console.log('- Average earning per sale:', averageEarningPerSale, 'ZORA ($' + averageEarningPerSaleUSD + ')')
+
+    // Convert collector map to array
+    const collectors = Array.from(collectorMap.entries()).map(([address, data]) => ({
+      address,
+      tokensPurchased: data.tokensPurchased,
+      isTrader: data.isTrader
+    }))
+    console.log('- Total collectors:', collectors.length)
+
+    // Get traders (those who have sold tokens they purchased)
     const traders = collectors.filter(c => c.isTrader)
+    console.log('- Total traders:', traders.length)
 
     // Combine all data into response
     const response: CreatorEarningsResponse = {
       totalEarnings,
+      totalEarningsUSD,
       averageEarningPerSale,
+      averageEarningPerSaleUSD,
       salesByTimeframe,
-      transactions: mockTransactions,
+      transactions,
       collectors,
       traders,
       displayName,

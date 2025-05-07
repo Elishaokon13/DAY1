@@ -16,6 +16,7 @@ import {
 // Type for the analytics data
 export interface AnalyticsData {
   totalEarnings: string;
+  totalEarningsUSD?: string;
   totalCollectors: number;
   totalTraders: number;
   collectorToTraderRatio: number;
@@ -66,6 +67,7 @@ export function Dashboard({ analyticsData }: DashboardProps) {
 
   const {
     totalEarnings,
+    totalEarningsUSD,
     totalCollectors,
     totalTraders,
     collectorToTraderRatio,
@@ -76,6 +78,7 @@ export function Dashboard({ analyticsData }: DashboardProps) {
 
   // Format earnings to 2 decimal places
   const formattedEarnings = parseFloat(totalEarnings).toFixed(2);
+  const formattedEarningsUSD = totalEarningsUSD ? `($${totalEarningsUSD})` : '';
   
   // Calculate percentage of traders
   const traderPercentage = totalCollectors > 0
@@ -83,32 +86,38 @@ export function Dashboard({ analyticsData }: DashboardProps) {
     : 0;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       {/* User profile info */}
       {user && (
-        <div className="flex items-center space-x-4 mb-6">
+        <div className="flex items-center space-x-6 mb-8 bg-[var(--app-card-background)] p-6 rounded-xl shadow-sm border border-[var(--app-border)]">
           {user.profileImage && (
-            <div className="w-14 h-14 rounded-full overflow-hidden relative">
+            <div className="w-16 h-16 rounded-full overflow-hidden relative ring-2 ring-[var(--app-accent)]">
               <Image 
                 src={user.profileImage} 
                 alt={user.displayName || 'Creator'} 
                 fill={true}
-                sizes="56px"
+                sizes="64px"
                 className="object-cover"
               />
             </div>
           )}
           
           <div>
-            <h2 className="text-xl font-bold">
+            <h2 className="text-2xl font-bold tracking-tight">
               {user.displayName || 'Creator Dashboard'}
             </h2>
-            <div className="flex space-x-3 text-sm text-[var(--app-foreground-muted)]">
+            <div className="flex space-x-4 text-sm text-[var(--app-foreground-muted)] mt-1">
               {user.zoraHandle && (
-                <span>Zora: @{user.zoraHandle}</span>
+                <span className="flex items-center">
+                  <span className="w-2 h-2 bg-[var(--app-accent)] rounded-full mr-2"></span>
+                  Zora: @{user.zoraHandle}
+                </span>
               )}
               {user.rodeoUsername && (
-                <span>Rodeo: @{user.rodeoUsername}</span>
+                <span className="flex items-center">
+                  <span className="w-2 h-2 bg-[#4ade80] rounded-full mr-2"></span>
+                  Rodeo: @{user.rodeoUsername}
+                </span>
               )}
             </div>
           </div>
@@ -116,10 +125,11 @@ export function Dashboard({ analyticsData }: DashboardProps) {
       )}
 
       {/* Key metrics */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <StatCard
           title="Total Earnings"
-          value={`${formattedEarnings} ETH`}
+          value={`${formattedEarnings} ZORA`}
+          subtext={formattedEarningsUSD}
           icon={<DollarSign size={20} />}
         />
         
@@ -138,14 +148,14 @@ export function Dashboard({ analyticsData }: DashboardProps) {
         
         <StatCard
           title="Average Earnings"
-          value={`${(parseFloat(totalEarnings) / (platforms.zora.collectors + platforms.rodeo.collectors || 1)).toFixed(2)} ETH`}
-          subtext="Per collector"
+          value={`${(parseFloat(totalEarnings) / (platforms.zora.collectors + platforms.rodeo.collectors || 1)).toFixed(2)} ZORA`}
+          subtext={totalEarningsUSD ? `$${(parseFloat(totalEarningsUSD) / (platforms.zora.collectors + platforms.rodeo.collectors || 1)).toFixed(2)} per collector` : ''}
           icon={<BarChart2 size={20} />}
         />
       </div>
 
       {/* Charts */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         <div className="lg:col-span-2">
           <EarningsChart timeSeriesData={timeSeriesData} />
         </div>

@@ -13,9 +13,9 @@ import {
 type TimeframeOption = 'daily' | 'weekly' | 'monthly';
 
 interface TimeSeriesData {
-  daily: { [date: string]: { earnings: number; count: number } };
-  weekly: { [week: string]: { earnings: number; count: number } };
-  monthly: { [month: string]: { earnings: number; count: number } };
+  daily: { [date: string]: { earnings: number; earningsUSD?: number; count: number } };
+  weekly: { [week: string]: { earnings: number; earningsUSD?: number; count: number } };
+  monthly: { [month: string]: { earnings: number; earningsUSD?: number; count: number } };
 }
 
 interface EarningsChartProps {
@@ -34,6 +34,7 @@ export function EarningsChart({ timeSeriesData, className = '' }: EarningsChartP
       .map(([period, data]) => ({
         period,
         earnings: parseFloat(data.earnings.toFixed(2)),
+        earningsUSD: data.earningsUSD ? parseFloat(data.earningsUSD.toFixed(2)) : undefined,
         count: data.count,
       }))
       .sort((a, b) => a.period.localeCompare(b.period));
@@ -64,17 +65,17 @@ export function EarningsChart({ timeSeriesData, className = '' }: EarningsChartP
   };
 
   return (
-    <div className={`bg-[var(--app-card-background)] p-5 rounded-lg shadow-sm border border-[var(--app-border)] ${className}`}>
-      <div className="flex justify-between items-center mb-4">
-        <h3 className="text-lg font-semibold">Earnings Over Time</h3>
+    <div className={`bg-[var(--app-card-background)] p-6 rounded-xl shadow-sm border border-[var(--app-border)] ${className}`}>
+      <div className="flex justify-between items-center mb-6">
+        <h3 className="text-xl font-semibold tracking-tight">Earnings Over Time</h3>
         
-        <div className="flex space-x-2">
+        <div className="flex space-x-2 bg-[var(--app-background)] p-1 rounded-lg">
           <button
             onClick={() => setTimeframe('daily')}
-            className={`px-2 py-1 text-xs rounded ${
+            className={`px-3 py-1.5 text-sm rounded-md transition-all duration-200 ${
               timeframe === 'daily'
-                ? 'bg-[var(--app-accent)] text-white'
-                : 'bg-[var(--app-background)] text-[var(--app-foreground-muted)]'
+                ? 'bg-[var(--app-accent)] text-white shadow-sm'
+                : 'text-[var(--app-foreground-muted)] hover:text-[var(--app-foreground)]'
             }`}
           >
             Daily
@@ -82,10 +83,10 @@ export function EarningsChart({ timeSeriesData, className = '' }: EarningsChartP
           
           <button
             onClick={() => setTimeframe('weekly')}
-            className={`px-2 py-1 text-xs rounded ${
+            className={`px-3 py-1.5 text-sm rounded-md transition-all duration-200 ${
               timeframe === 'weekly'
-                ? 'bg-[var(--app-accent)] text-white'
-                : 'bg-[var(--app-background)] text-[var(--app-foreground-muted)]'
+                ? 'bg-[var(--app-accent)] text-white shadow-sm'
+                : 'text-[var(--app-foreground-muted)] hover:text-[var(--app-foreground)]'
             }`}
           >
             Weekly
@@ -93,10 +94,10 @@ export function EarningsChart({ timeSeriesData, className = '' }: EarningsChartP
           
           <button
             onClick={() => setTimeframe('monthly')}
-            className={`px-2 py-1 text-xs rounded ${
+            className={`px-3 py-1.5 text-sm rounded-md transition-all duration-200 ${
               timeframe === 'monthly'
-                ? 'bg-[var(--app-accent)] text-white'
-                : 'bg-[var(--app-background)] text-[var(--app-foreground-muted)]'
+                ? 'bg-[var(--app-accent)] text-white shadow-sm'
+                : 'text-[var(--app-foreground-muted)] hover:text-[var(--app-foreground)]'
             }`}
           >
             Monthly
@@ -104,7 +105,7 @@ export function EarningsChart({ timeSeriesData, className = '' }: EarningsChartP
         </div>
       </div>
       
-      <div className="h-64">
+      <div className="h-72">
         {chartData.length > 0 ? (
           <ResponsiveContainer width="100%" height="100%">
             <AreaChart
@@ -116,25 +117,38 @@ export function EarningsChart({ timeSeriesData, className = '' }: EarningsChartP
                 bottom: 0,
               }}
             >
-              <CartesianGrid strokeDasharray="3 3" vertical={false} />
+              <defs>
+                <linearGradient id="colorEarnings" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor="var(--app-accent)" stopOpacity={0.8}/>
+                  <stop offset="95%" stopColor="var(--app-accent)" stopOpacity={0.1}/>
+                </linearGradient>
+              </defs>
+              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--app-border)" />
               <XAxis 
                 dataKey="period" 
                 tickFormatter={formatPeriod} 
-                tick={{ fontSize: 12 }}
+                tick={{ fontSize: 12, fill: 'var(--app-foreground-muted)' }}
                 tickMargin={10}
+                axisLine={{ stroke: 'var(--app-border)' }}
               />
               <YAxis 
                 tickFormatter={formatYAxis} 
-                tick={{ fontSize: 12 }}
+                tick={{ fontSize: 12, fill: 'var(--app-foreground-muted)' }}
                 width={35}
+                axisLine={{ stroke: 'var(--app-border)' }}
               />
               <Tooltip
-                formatter={(value: number) => [`${value.toFixed(2)} ETH`, 'Earnings']}
+                formatter={(value: number) => {
+                  const data = chartData.find(d => d.earnings === value);
+                  const usdValue = data?.earningsUSD;
+                  return [`${value.toFixed(2)} ZORA${usdValue ? ` ($${usdValue.toFixed(2)})` : ''}`, 'Earnings'];
+                }}
                 labelFormatter={(period) => formatPeriod(period as string)}
                 contentStyle={{
                   backgroundColor: 'var(--app-card-background)',
                   borderColor: 'var(--app-border)',
-                  borderRadius: '0.375rem',
+                  borderRadius: '0.5rem',
+                  boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)',
                 }}
               />
               <Legend />
@@ -143,8 +157,9 @@ export function EarningsChart({ timeSeriesData, className = '' }: EarningsChartP
                 dataKey="earnings"
                 stackId="1"
                 stroke="var(--app-accent)"
-                fill="var(--app-accent-translucent)"
-                name="Earnings (ETH)"
+                fill="url(#colorEarnings)"
+                name="Earnings (ZORA)"
+                strokeWidth={2}
               />
             </AreaChart>
           </ResponsiveContainer>

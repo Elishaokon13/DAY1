@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { RodeoClient } from '@rodeo/sdk'
 
 // Define types for Rodeo Club post data
 export type Post = {
@@ -50,92 +51,67 @@ export async function GET(req: NextRequest) {
   const cleanUsername = username.trim().replace(/^@/, '')
 
   try {
-    // TODO: In a real implementation, we would make API calls to Rodeo Club
-    // to fetch actual creator earnings data. For now, we'll use mock data.
-    
-    // Mock posts data
-    const mockPosts: Post[] = [
-      {
-        id: '1',
-        timestamp: '2023-01-10T15:30:00Z',
-        title: 'My First NFT Post',
-        imageUrl: 'https://example.com/image1.jpg',
-        earnings: '0.3',
-        collectCount: 5,
-        collectors: [
-          { address: '0xcollector1', isTrader: false },
-          { address: '0xcollector2', isTrader: true },
-          { address: '0xcollector3', isTrader: false },
-          { address: '0xcollector4', isTrader: false },
-          { address: '0xcollector5', isTrader: true }
-        ]
-      },
-      {
-        id: '2',
-        timestamp: '2023-02-15T10:45:00Z',
-        title: 'Abstract Art Series',
-        imageUrl: 'https://example.com/image2.jpg',
-        earnings: '0.5',
-        collectCount: 3,
-        collectors: [
-          { address: '0xcollector1', isTrader: false },
-          { address: '0xcollector6', isTrader: false },
-          { address: '0xcollector7', isTrader: true }
-        ]
-      },
-      {
-        id: '3',
-        timestamp: '2023-03-22T09:15:00Z',
-        title: 'Digital Landscapes',
-        imageUrl: 'https://example.com/image3.jpg',
-        earnings: '0.8',
-        collectCount: 7,
-        collectors: [
-          { address: '0xcollector2', isTrader: true },
-          { address: '0xcollector3', isTrader: false },
-          { address: '0xcollector5', isTrader: true },
-          { address: '0xcollector8', isTrader: false },
-          { address: '0xcollector9', isTrader: false },
-          { address: '0xcollector10', isTrader: true },
-          { address: '0xcollector11', isTrader: false }
-        ]
-      }
-    ]
+    // Initialize Rodeo client
+    const rodeoClient = new RodeoClient({
+      apiKey: process.env.RODEO_API_KEY
+    })
 
-    // Calculate total earnings from mock data
-    const totalEarnings = mockPosts
+    // Fetch user profile
+    const profile = await rodeoClient.getProfile(cleanUsername)
+    if (!profile) {
+      return NextResponse.json({ error: 'Rodeo profile not found' }, { status: 404 })
+    }
+
+    // Fetch user's posts
+    const posts = await rodeoClient.getUserPosts(cleanUsername)
+    
+    // Process posts data
+    const processedPosts: Post[] = posts.map(post => ({
+      id: post.id,
+      timestamp: post.createdAt,
+      title: post.title,
+      imageUrl: post.imageUrl,
+      earnings: post.earnings.toString(),
+      collectCount: post.collectCount,
+      collectors: post.collectors.map(collector => ({
+        address: collector.address,
+        isTrader: collector.isTrader
+      }))
+    }))
+
+    // Calculate total earnings
+    const totalEarnings = processedPosts
       .reduce((sum, post) => sum + parseFloat(post.earnings), 0)
       .toString()
 
     // Calculate average earning per post
-    const postCount = mockPosts.length
-    const averageEarningPerPost = (totalEarnings && postCount) 
-      ? (parseFloat(totalEarnings) / postCount).toString() 
+    const postCount = processedPosts.length
+    const averageEarningPerPost = postCount > 0
+      ? (parseFloat(totalEarnings) / postCount).toString()
       : '0'
 
-    // Prepare time-based data
+    // Process time-based data
     const postsByTimeframe = {
-      daily: { 
-        '2023-01-10': 1, 
-        '2023-02-15': 1, 
-        '2023-03-22': 1 
-      },
-      weekly: { 
-        '2023-W02': 1, 
-        '2023-W07': 1, 
-        '2023-W12': 1 
-      },
-      monthly: { 
-        '2023-01': 1, 
-        '2023-02': 1, 
-        '2023-03': 1 
-      }
+      daily: {} as { [date: string]: number },
+      weekly: {} as { [week: string]: number },
+      monthly: {} as { [month: string]: number }
     }
+
+    processedPosts.forEach(post => {
+      const postDate = new Date(post.timestamp)
+      const dateKey = postDate.toISOString().split('T')[0]
+      const weekKey = `2023-W${Math.ceil((postDate.getDate() + postDate.getDay()) / 7)}`
+      const monthKey = postDate.toISOString().slice(0, 7)
+
+      postsByTimeframe.daily[dateKey] = (postsByTimeframe.daily[dateKey] || 0) + 1
+      postsByTimeframe.weekly[weekKey] = (postsByTimeframe.weekly[weekKey] || 0) + 1
+      postsByTimeframe.monthly[monthKey] = (postsByTimeframe.monthly[monthKey] || 0) + 1
+    })
 
     // Process collector data
     const collectorMap = new Map<string, { postsCollected: number, isTrader: boolean }>()
     
-    mockPosts.forEach(post => {
+    processedPosts.forEach(post => {
       post.collectors.forEach(collector => {
         if (collectorMap.has(collector.address)) {
           const existing = collectorMap.get(collector.address)!
@@ -165,7 +141,7 @@ export async function GET(req: NextRequest) {
       .map(c => ({
         address: c.address,
         postsCollected: c.postsCollected,
-        postsSold: Math.floor(c.postsCollected / 2) // Mock data: assume they sold half
+        postsSold: Math.floor(c.postsCollected / 2) // This would need to be calculated from actual sales data
       }))
 
     // Combine all data into response
@@ -174,11 +150,11 @@ export async function GET(req: NextRequest) {
       averageEarningPerPost,
       totalPosts: postCount,
       postsByTimeframe,
-      posts: mockPosts,
+      posts: processedPosts,
       collectors,
       traders,
       username: cleanUsername,
-      profileImage: 'https://example.com/profile.jpg' // Mock profile image
+      profileImage: profile.avatarUrl
     }
 
     return NextResponse.json(response)

@@ -95,10 +95,10 @@ export function CollectorTraderChart({
   };
 
   return (
-    <div className={`bg-[var(--app-card-background)] p-5 rounded-lg shadow-sm border border-[var(--app-border)] ${className}`}>
-      <h3 className="text-lg font-semibold mb-4">Collectors vs Traders</h3>
+    <div className={`bg-[var(--app-card-background)] p-6 rounded-xl shadow-sm border border-[var(--app-border)] ${className}`}>
+      <h3 className="text-xl font-semibold tracking-tight mb-6">Collectors vs Traders</h3>
       
-      <div className="h-64">
+      <div className="h-72">
         {totalCollectors > 0 ? (
           <ResponsiveContainer width="100%" height="100%">
             <PieChart>
@@ -108,16 +108,37 @@ export function CollectorTraderChart({
                 cy="50%"
                 labelLine={false}
                 label={renderCustomizedLabel}
-                outerRadius={80}
+                outerRadius={90}
                 fill="#8884d8"
                 dataKey="value"
+                animationDuration={1000}
+                animationBegin={0}
               >
                 {data.map((entry, index) => (
-                  <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                  <Cell 
+                    key={`cell-${index}`} 
+                    fill={COLORS[index % COLORS.length]}
+                    stroke="var(--app-card-background)"
+                    strokeWidth={2}
+                  />
                 ))}
               </Pie>
-              <Tooltip content={<CustomTooltip />} />
-              <Legend />
+              <Tooltip 
+                content={<CustomTooltip />}
+                contentStyle={{
+                  backgroundColor: 'var(--app-card-background)',
+                  borderColor: 'var(--app-border)',
+                  borderRadius: '0.5rem',
+                  boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)',
+                }}
+              />
+              <Legend 
+                verticalAlign="bottom" 
+                height={36}
+                formatter={(value) => (
+                  <span className="text-sm text-[var(--app-foreground-muted)]">{value}</span>
+                )}
+              />
             </PieChart>
           </ResponsiveContainer>
         ) : (
@@ -127,21 +148,21 @@ export function CollectorTraderChart({
         )}
       </div>
       
-      <div className="grid grid-cols-2 gap-4 mt-4">
-        <div className="bg-[var(--app-background)] p-3 rounded-md">
-          <div className="text-sm text-[var(--app-foreground-muted)] mb-1">Collectors (Hold)</div>
-          <div className="text-xl font-bold">{pureCollectors}</div>
-          <div className="text-xs text-[var(--app-foreground-muted)]">
+      <div className="grid grid-cols-2 gap-4 mt-6">
+        <div className="bg-[var(--app-background)] p-4 rounded-lg">
+          <div className="text-sm font-medium text-[var(--app-foreground-muted)] mb-2">Collectors (Hold)</div>
+          <div className="text-2xl font-bold tracking-tight">{pureCollectors}</div>
+          <div className="text-sm text-[var(--app-foreground-muted)] mt-1">
             {totalCollectors > 0
               ? `${((pureCollectors / totalCollectors) * 100).toFixed(1)}% of total`
               : 'No data'}
           </div>
         </div>
         
-        <div className="bg-[var(--app-background)] p-3 rounded-md">
-          <div className="text-sm text-[var(--app-foreground-muted)] mb-1">Traders (Buy & Sell)</div>
-          <div className="text-xl font-bold">{totalTraders}</div>
-          <div className="text-xs text-[var(--app-foreground-muted)]">
+        <div className="bg-[var(--app-background)] p-4 rounded-lg">
+          <div className="text-sm font-medium text-[var(--app-foreground-muted)] mb-2">Traders (Buy & Sell)</div>
+          <div className="text-2xl font-bold tracking-tight">{totalTraders}</div>
+          <div className="text-sm text-[var(--app-foreground-muted)] mt-1">
             {totalCollectors > 0
               ? `${((totalTraders / totalCollectors) * 100).toFixed(1)}% of total`
               : 'No data'}

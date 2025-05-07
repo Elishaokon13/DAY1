@@ -50,61 +50,55 @@ export default function AnalyticsPage() {
 
   return (
     <div className="flex flex-col min-h-screen font-sans text-[var(--app-foreground)] mini-app-theme from-[var(--app-background)] to-[var(--app-gray)]">
-      <div className="w-full max-w-5xl mx-auto px-4 py-6">
-        <header className="mb-8">
-          <h1 className="text-3xl font-bold text-center mb-2">Creator Analytics</h1>
-          <p className="text-center text-[var(--app-foreground-muted)]">
-            Track your earnings across platforms
+      <div className="w-full max-w-6xl mx-auto px-4 py-8">
+        <header className="mb-10 text-center">
+          <h1 className="text-4xl font-bold tracking-tight mb-3">Creator Analytics</h1>
+          <p className="text-lg text-[var(--app-foreground-muted)] max-w-2xl mx-auto">
+            Track your earnings and community growth across Zora and Rodeo platforms
           </p>
         </header>
 
         {!analyticsData ? (
-          <div className="space-y-6 max-w-md mx-auto">
+          <div className="space-y-8 max-w-xl mx-auto">
             {/* Input Form */}
-            <div className="bg-[var(--app-card-background)] p-6 rounded-lg shadow-sm border border-[var(--app-border)]">
-              <h2 className="text-xl font-semibold mb-4">Enter Your Platforms</h2>
+            <div className="bg-[var(--app-card-background)] p-8 rounded-xl shadow-sm border border-[var(--app-border)]">
+              <h2 className="text-2xl font-semibold tracking-tight mb-6">Enter Your Platforms</h2>
               
-              <div className="space-y-4">
+              <div className="space-y-6">
                 <div>
-                  <label htmlFor="zora-handle" className="block text-sm font-medium mb-1">
+                  <label htmlFor="zoraHandle" className="block text-sm font-medium text-[var(--app-foreground-muted)] mb-2">
                     Zora Handle
                   </label>
-                  <div className="relative">
-                    <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none text-[var(--app-foreground-muted)]">
-                      @
-                    </div>
-                    <input
-                      id="zora-handle"
-                      type="text"
-                      value={zoraHandle}
-                      onChange={(e) => setZoraHandle(e.target.value)}
-                      placeholder="username"
-                      className="bg-[var(--app-input-background)] border border-[var(--app-border)] rounded-md w-full py-2 pl-8 pr-4 focus:outline-none focus:ring-2 focus:ring-[var(--app-accent)]"
-                    />
-                  </div>
+                  <input
+                    type="text"
+                    id="zoraHandle"
+                    value={zoraHandle}
+                    onChange={(e) => setZoraHandle(e.target.value)}
+                    placeholder="Enter your Zora handle"
+                    className="w-full px-4 py-2.5 bg-[var(--app-background)] border border-[var(--app-border)] rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--app-accent)] focus:border-transparent transition-all duration-200"
+                  />
                 </div>
                 
                 <div>
-                  <label htmlFor="rodeo-username" className="block text-sm font-medium mb-1">
-                    Rodeo Username
+                  <label htmlFor="rodeoUsername" className="block text-sm font-medium text-[var(--app-foreground-muted)] mb-2">
+                    Rodeo Username (Temporarily Unavailable)
                   </label>
-                  <div className="relative">
-                    <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none text-[var(--app-foreground-muted)]">
-                      @
-                    </div>
-                    <input
-                      id="rodeo-username"
-                      type="text"
-                      value={rodeoUsername}
-                      onChange={(e) => setRodeoUsername(e.target.value)}
-                      placeholder="username"
-                      className="bg-[var(--app-input-background)] border border-[var(--app-border)] rounded-md w-full py-2 pl-8 pr-4 focus:outline-none focus:ring-2 focus:ring-[var(--app-accent)]"
-                    />
-                  </div>
+                  <input
+                    type="text"
+                    id="rodeoUsername"
+                    value={rodeoUsername}
+                    onChange={(e) => setRodeoUsername(e.target.value)}
+                    placeholder="Rodeo integration coming soon"
+                    disabled={true}
+                    className="w-full px-4 py-2.5 bg-[var(--app-background)] border border-[var(--app-border)] rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--app-accent)] focus:border-transparent transition-all duration-200 opacity-50 cursor-not-allowed"
+                  />
+                  <p className="mt-1 text-sm text-[var(--app-foreground-muted)]">
+                    Rodeo integration is currently being updated. Please check back later.
+                  </p>
                 </div>
                 
                 {error && (
-                  <div className="text-red-500 text-sm mt-2">
+                  <div className="text-red-500 text-sm bg-red-50 p-3 rounded-lg border border-red-200">
                     {error}
                   </div>
                 )}
@@ -112,20 +106,30 @@ export default function AnalyticsPage() {
                 <Button
                   onClick={fetchAnalytics}
                   disabled={isLoading || (!zoraHandle && !rodeoUsername)}
-                  className="w-full"
+                  className="w-full py-2.5 text-base font-medium transition-all duration-200"
                 >
-                  {isLoading ? 'Loading...' : 'Get Analytics'}
+                  {isLoading ? (
+                    <span className="flex items-center justify-center">
+                      <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                      </svg>
+                      Loading...
+                    </span>
+                  ) : (
+                    'Get Analytics'
+                  )}
                 </Button>
               </div>
             </div>
           </div>
         ) : (
-          <div className="space-y-6">
+          <div className="space-y-8">
             <div className="flex justify-end">
               <Button
                 variant="outline"
                 onClick={() => setAnalyticsData(null)}
-                className="text-sm"
+                className="text-sm px-4 py-2"
               >
                 Search Another Creator
               </Button>
