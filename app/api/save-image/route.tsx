@@ -31,7 +31,20 @@ export async function POST(request: NextRequest) {
     const base64Data = imageData.split(',')[1];
     const buffer = Buffer.from(base64Data, 'base64');
     
-    // Convert buffer to ReadableStream for Vercel Blob
+    // URL encode the displayName to handle special characters like parentheses
+    const encodedDisplayName = encodeURIComponent(displayName);
+
+    // Check if BLOB_READ_WRITE_TOKEN is available
+    if (!process.env.BLOB_READ_WRITE_TOKEN) {
+      console.warn("⚠️ BLOB_READ_WRITE_TOKEN not found. Using mock Blob URL for development.");
+      // Return a mock blob URL for development purposes
+      return Response.json({ 
+        blobUrl: `https://example-mock-blob-url.vercel.app/images/${encodedDisplayName}.png`,
+        isMock: true
+      });
+    }
+
+    // Convert buffer to ReadableStream for Vercel Blob if token is available
     const readableStream = new ReadableStream({
       start(controller) {
         controller.enqueue(new Uint8Array(buffer));
@@ -39,14 +52,12 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    // URL encode the displayName to handle special characters like parentheses
-    const encodedDisplayName = encodeURIComponent(displayName);
-
     // Save the image to Vercel Blob with encoded filename
     const blob = await put(`images/${encodedDisplayName}.png`, readableStream, {
       access: "public",
       contentType: "image/png",
       allowOverwrite: true,
+      token: process.env.BLOB_READ_WRITE_TOKEN,
     });
 
     // Return the blob URL
