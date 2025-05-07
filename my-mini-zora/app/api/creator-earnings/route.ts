@@ -1,13 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getProfile, getProfileBalances } from '@zoralabs/coins-sdk'
 
+// Constants
+const CREATOR_FEE_PERCENTAGE = 0.05; // 5% creator fee
+const ZORA_TOKEN_ADDRESS = '0x1111111111166b7FE7bd91427724B487980aFc69'
+const ZORA_API_URL = 'https://explorer.zora.energy/graphql'
+
 // Define types for our response
 export type Transaction = {
   id: string
   timestamp: string
   type: 'sale' | 'transfer' | 'mint'
   amount: string
-  amountUSD?: string  // Added USD amount
+  amountUSD?: string
   tokenAddress: string
   tokenId?: string
   tokenName?: string
@@ -18,14 +23,14 @@ export type Transaction = {
 export type CollectorData = {
   address: string
   tokensPurchased: number
-  isTrader: boolean  // true if they've sold tokens they purchased
+  isTrader: boolean
 }
 
 export type CreatorEarningsResponse = {
   totalEarnings: string
-  totalEarningsUSD?: string  // Added USD total
+  totalEarningsUSD?: string
   averageEarningPerSale: string
-  averageEarningPerSaleUSD?: string  // Added USD average
+  averageEarningPerSaleUSD?: string
   salesByTimeframe: {
     daily: { [date: string]: number }
     weekly: { [week: string]: number }
@@ -39,105 +44,133 @@ export type CreatorEarningsResponse = {
   profileHandle?: string | null
 }
 
-// Define types for Zora API responses
-type ZoraCoinBalance = {
-  balance: string
+// Define types for token transfers
+type TokenTransfer = {
   id: string
-  coin?: {
-    id: string
-    name: string
-    description: string
-    address: string
-    symbol: string
-    totalSupply: string
-    totalVolume: string
-    volume24h: string
-    createdAt?: string
-    creatorAddress?: string
-    mediaContent?: {
-      mimeType?: string
-      originalUri: string
-      previewImage?: {
-        small: string
-        medium: string
-        blurhash?: string
-      }
-    }
-    uniqueHolders: number
-  }
+  timestamp: string
+  type: string
+  amount: string
+  from: string
+  to: string
 }
 
-// Zora token address
-const ZORA_TOKEN_ADDRESS = '0x1111111111166b7FE7bd91427724B487980aFc69'
+type Token = {
+  id: string
+  name: string
+  address: string
+  transfers: TokenTransfer[]
+}
 
 // Function to fetch Zora price from DexScreener
 async function getZoraPrice(): Promise<number> {
   try {
-    const response = await fetch(`https://api.dexscreener.com/latest/dex/tokens/${ZORA_TOKEN_ADDRESS}`)
-    const data = await response.json()
+    const response = await fetch('https://api.dexscreener.com/latest/dex/tokens/0x1111111111166b7FE7bd91427724B487980aFc69');
+    const data = await response.json();
     
-    if (data.pairs && data.pairs.length > 0) {
-      // Get the price from the first pair (usually the most liquid)
-      const price = parseFloat(data.pairs[0].priceUsd)
-      console.log('Fetched Zora price from DexScreener:', price)
-      return price
+    if (!data || !data.pairs || !Array.isArray(data.pairs) || data.pairs.length === 0) {
+      console.warn('Invalid or empty response from DexScreener API');
+      return 0.01;
     }
+
+    const price = parseFloat(data.pairs[0].priceUsd);
     
-    console.warn('No price data found in DexScreener response')
-    return 0.5 // Fallback price
+    if (isNaN(price) || price <= 0) {
+      console.warn('Invalid price from DexScreener API:', data.pairs[0].priceUsd);
+      return 0.01;
+    }
+
+    console.log('Successfully fetched Zora price:', price, 'USD');
+    return price;
   } catch (error) {
-    console.error('Error fetching Zora price:', error)
-    return 0.5 // Fallback price
+    console.error('Failed to fetch Zora price:', error);
+    return 0.01;
   }
 }
 
 // Function to convert Zora amount to USD
-function convertToUSD(zoraAmount: string, priceUsd: number): string {
-  const amount = parseFloat(zoraAmount)
-  return (amount * priceUsd).toFixed(2)
+function convertToUSD(zoraAmount: string, zoraPrice: number): string {
+  return (parseFloat(zoraAmount) * zoraPrice).toFixed(2);
+}
+
+// Function to fetch token transfers from Zora API
+async function getTokenTransfers(address: string) {
+  try {
+    const response = await getProfileBalances({
+      identifier: address,
+      count: 100, // Get more balances per page
+    })
+
+    const profile = response.data?.profile
+    console.log(`Found ${profile?.coinBalances?.length || 0} coin balances`)
+
+    if (!profile?.coinBalances) {
+      return []
+    }
+
+    // Process balances into our token format
+    const tokens = profile.coinBalances.map((balance: any) => ({
+      id: balance.token?.id || '',
+      name: balance.token?.name || '',
+      address: balance.token?.address || '',
+      tokenId: balance.token?.tokenId,
+      transfers: [{
+        id: balance.id,
+        timestamp: balance.updatedAt,
+        type: 'sale',
+        amount: balance.amount,
+        from: balance.owner?.address || '',
+        to: address
+      }]
+    }))
+
+    console.log('Processed tokens:', tokens.length)
+    return tokens
+  } catch (error) {
+    console.error('Failed to fetch token transfers:', error)
+    return []
+  }
 }
 
 export async function GET(req: NextRequest) {
   const handle = req.nextUrl.searchParams.get('handle')
-  // timeframe parameter is reserved for future implementation
+  const timeframe = req.nextUrl.searchParams.get('timeframe') || 'all'
 
   if (!handle) {
-    return NextResponse.json({ error: 'Missing Zora handle' }, { status: 400 })
+    return NextResponse.json({ error: 'Zora handle is required' }, { status: 400 })
   }
 
-  // Clean up the handle input (remove @ if present)
   const cleanHandle = handle.trim().replace(/^@/, '')
 
   try {
     // Fetch Zora price first
     const zoraPrice = await getZoraPrice()
-    console.log('Using Zora price:', zoraPrice)
+    console.log('Current Zora price:', zoraPrice, 'USD')
 
     // Fetch profile data from Zora
     const profileRes = await getProfile({ identifier: cleanHandle })
-    const balancesRes = await getProfileBalances({ identifier: cleanHandle })
+    const profileData = profileRes?.data?.profile
 
-    // Extract profile information
-    const profileData = profileRes?.data 
-    
-    if (!profileData?.profile) {
+    if (!profileData) {
       console.log('Zora profile not found')
       return NextResponse.json({ error: 'Zora profile not found' }, { status: 404 })
     }
-    
-    const displayName =
-      profileData?.profile?.displayName ||
-      profileData?.profile?.handle ||
-      cleanHandle
 
-    const profileImage = profileData?.profile?.avatar?.medium || null
-    const profileHandle = profileData?.profile?.handle
+    const displayName = profileData.displayName || profileData.handle || cleanHandle
+    const profileImage = profileData.avatar?.medium || null
+    const profileHandle = profileData.handle
 
-    // Get tokens from balances
-    const balanceEdges = balancesRes?.data?.profile?.coinBalances?.edges || []
-    const tokens: ZoraCoinBalance[] = balanceEdges.map(edge => edge.node)
-    
-    // Process tokens data to get sales information
+    // Get creator's wallet address
+    const creatorAddress = profileData.publicWallet?.walletAddress
+    if (!creatorAddress) {
+      console.log('Creator wallet address not found')
+      return NextResponse.json({ error: 'Creator wallet address not found' }, { status: 404 })
+    }
+
+    // Fetch token transfers for the creator
+    const tokens = await getTokenTransfers(creatorAddress)
+    console.log('Found', tokens.length, 'tokens')
+
+    // Process transfers to calculate earnings
     const transactions: Transaction[] = []
     const collectorMap = new Map<string, { tokensPurchased: number, isTrader: boolean }>()
     const salesByTimeframe = {
@@ -146,89 +179,54 @@ export async function GET(req: NextRequest) {
       monthly: {} as { [month: string]: number }
     }
 
-    console.log('Processing tokens:', tokens.length)
+    let totalEarnings = 0
+    let totalSales = 0
 
-    // Process each token to extract sales data
-    tokens.forEach((token, index) => {
-      console.log(`\nProcessing token ${index + 1}:`)
-      console.log('- Token name:', token.coin?.name)
-      console.log('- Total volume:', token.coin?.totalVolume)
-      console.log('- Created at:', token.coin?.createdAt)
-      
-      if (token.coin?.totalVolume) {
-        const volume = parseFloat(token.coin.totalVolume)
-        console.log('- Parsed volume:', volume)
-        
-        if (volume > 0) {
-          // Use current date if createdAt is not available
-          const saleDate = new Date()
+    tokens.forEach((token: any) => {
+      token.transfers.forEach((transfer: any) => {
+        if (transfer.type === 'sale') {
+          const creatorEarnings = (parseFloat(transfer.amount) * CREATOR_FEE_PERCENTAGE).toString()
+          const creatorEarningsUSD = convertToUSD(creatorEarnings, zoraPrice)
+          
+          const saleDate = new Date(transfer.timestamp)
           const dateKey = saleDate.toISOString().split('T')[0]
           const weekKey = `${saleDate.getFullYear()}-W${Math.ceil((saleDate.getDate() + saleDate.getDay()) / 7)}`
           const monthKey = saleDate.toISOString().slice(0, 7)
-
-          console.log('- Sale date:', saleDate.toISOString())
-          console.log('- Date key:', dateKey)
-          console.log('- Week key:', weekKey)
-          console.log('- Month key:', monthKey)
 
           // Update sales by timeframe
           salesByTimeframe.daily[dateKey] = (salesByTimeframe.daily[dateKey] || 0) + 1
           salesByTimeframe.weekly[weekKey] = (salesByTimeframe.weekly[weekKey] || 0) + 1
           salesByTimeframe.monthly[monthKey] = (salesByTimeframe.monthly[monthKey] || 0) + 1
 
-          // Calculate creator earnings (assuming 5% creator fee)
-          const creatorEarnings = (volume * 0.05).toString()
-          const creatorEarningsUSD = convertToUSD(creatorEarnings, zoraPrice)
-          console.log('- Creator earnings:', creatorEarnings, 'ZORA ($' + creatorEarningsUSD + ')')
-
           // Add transaction
-          const transaction: Transaction = {
-            id: `${token.coin.address}-${dateKey}`,
-            timestamp: saleDate.toISOString(),
-            type: 'sale' as const,
+          transactions.push({
+            id: transfer.id,
+            timestamp: transfer.timestamp,
+            type: 'sale',
             amount: creatorEarnings,
             amountUSD: creatorEarningsUSD,
-            tokenAddress: token.coin.address,
-            tokenName: token.coin.name,
-            buyerAddress: token.coin.creatorAddress,
-            sellerAddress: token.coin.creatorAddress
-          }
-          transactions.push(transaction)
-          console.log('- Added transaction:', transaction)
+            tokenAddress: token.address,
+            tokenName: token.name,
+            buyerAddress: transfer.to,
+            sellerAddress: transfer.from
+          })
 
           // Update collector data
-          if (token.coin.creatorAddress) {
-            const buyerData = collectorMap.get(token.coin.creatorAddress) || { tokensPurchased: 0, isTrader: false }
-            buyerData.tokensPurchased++
-            collectorMap.set(token.coin.creatorAddress, buyerData)
-            console.log('- Updated collector data:', buyerData)
-          }
-        } else {
-          console.log('- Skipping token: volume is 0 or negative')
+          const buyerData = collectorMap.get(transfer.to) || { tokensPurchased: 0, isTrader: false }
+          buyerData.tokensPurchased++
+          collectorMap.set(transfer.to, buyerData)
+
+          totalEarnings += parseFloat(creatorEarnings)
+          totalSales++
         }
-      } else {
-        console.log('- Skipping token: no total volume data')
-      }
+      })
     })
 
-    // Calculate total earnings
-    const totalEarnings = transactions
-      .reduce((sum, tx) => sum + parseFloat(tx.amount), 0)
-      .toString()
-    const totalEarningsUSD = convertToUSD(totalEarnings, zoraPrice)
-
-    console.log('\nFinal calculations:')
-    console.log('- Total transactions:', transactions.length)
-    console.log('- Total earnings:', totalEarnings, 'ZORA ($' + totalEarningsUSD + ')')
-    console.log('- Sales by timeframe:', salesByTimeframe)
-
-    // Calculate average earning per sale
-    const salesCount = transactions.length
-    const averageEarningPerSale = salesCount > 0 
-      ? (parseFloat(totalEarnings) / salesCount).toString() 
+    // Calculate averages
+    const averageEarningPerSale = totalSales > 0 
+      ? (totalEarnings / totalSales).toFixed(2)
       : '0'
     const averageEarningPerSaleUSD = convertToUSD(averageEarningPerSale, zoraPrice)
-    console.log('- Average earning per sale:', averageEarningPerSale, 'ZORA ($' + averageEarningPerSaleUSD + ')')
 
     // Convert collector map to array
     const collectors = Array.from(collectorMap.entries()).map(([address, data]) => ({
@@ -236,16 +234,14 @@ export async function GET(req: NextRequest) {
       tokensPurchased: data.tokensPurchased,
       isTrader: data.isTrader
     }))
-    console.log('- Total collectors:', collectors.length)
 
     // Get traders (those who have sold tokens they purchased)
     const traders = collectors.filter(c => c.isTrader)
-    console.log('- Total traders:', traders.length)
 
-    // Combine all data into response
+    // Prepare response
     const response: CreatorEarningsResponse = {
-      totalEarnings,
-      totalEarningsUSD,
+      totalEarnings: totalEarnings.toFixed(2),
+      totalEarningsUSD: convertToUSD(totalEarnings.toFixed(2), zoraPrice),
       averageEarningPerSale,
       averageEarningPerSaleUSD,
       salesByTimeframe,

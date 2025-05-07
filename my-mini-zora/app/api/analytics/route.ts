@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server'
 export type CombinedAnalyticsResponse = {
   // Overall earnings
   totalEarnings: string
+  totalEarningsUSD?: string
   totalCollectors: number
   totalTraders: number
   collectorToTraderRatio: number
@@ -11,34 +12,38 @@ export type CombinedAnalyticsResponse = {
   platforms: {
     zora: {
       totalEarnings: string
+      totalEarningsUSD?: string
       averageEarning: string
+      averageEarningUSD?: string
       collectors: number
       traders: number
       salesByTimeframe: {
-        daily: { [date: string]: number }
-        weekly: { [week: string]: number }
-        monthly: { [month: string]: number }
+        daily: { [date: string]: { count: number; earnings: number; earningsUSD?: number } }
+        weekly: { [week: string]: { count: number; earnings: number; earningsUSD?: number } }
+        monthly: { [month: string]: { count: number; earnings: number; earningsUSD?: number } }
       }
     },
     rodeo: {
       totalEarnings: string
+      totalEarningsUSD?: string
       averageEarning: string
+      averageEarningUSD?: string
       totalPosts: number
       collectors: number
       traders: number
       postsByTimeframe: {
-        daily: { [date: string]: number }
-        weekly: { [week: string]: number }
-        monthly: { [month: string]: number }
+        daily: { [date: string]: { count: number; earnings: number; earningsUSD?: number } }
+        weekly: { [week: string]: { count: number; earnings: number; earningsUSD?: number } }
+        monthly: { [month: string]: { count: number; earnings: number; earningsUSD?: number } }
       }
     }
   },
   
   // Aggregated time-series data for charts
   timeSeriesData: {
-    daily: { [date: string]: { earnings: number, earningsUSD?: number, count: number } }
-    weekly: { [week: string]: { earnings: number, earningsUSD?: number, count: number } }
-    monthly: { [month: string]: { earnings: number, earningsUSD?: number, count: number } }
+    daily: { [date: string]: { earnings: number; earningsUSD?: number; count: number } }
+    weekly: { [week: string]: { earnings: number; earningsUSD?: number; count: number } }
+    monthly: { [month: string]: { earnings: number; earningsUSD?: number; count: number } }
   },
   
   // User profile info
@@ -54,6 +59,12 @@ export type CombinedAnalyticsResponse = {
 interface Collector {
   address: string
   isTrader: boolean
+}
+
+interface Transaction {
+  timestamp: string;
+  amount: string;
+  amountUSD?: string;
 }
 
 export async function GET(req: NextRequest) {
@@ -85,7 +96,12 @@ export async function GET(req: NextRequest) {
     // Calculate overall totals
     const zoraTotalEarnings = zoraData ? parseFloat(zoraData.totalEarnings || '0') : 0
     const rodeoTotalEarnings = rodeoData ? parseFloat(rodeoData.totalEarnings || '0') : 0
-    const totalEarnings = (zoraTotalEarnings + rodeoTotalEarnings).toString()
+    const totalEarnings = (zoraTotalEarnings + rodeoTotalEarnings).toFixed(2)
+    
+    // Calculate USD totals
+    const zoraTotalEarningsUSD = zoraData?.totalEarningsUSD ? parseFloat(zoraData.totalEarningsUSD) : 0
+    const rodeoTotalEarningsUSD = rodeoData?.totalEarningsUSD ? parseFloat(rodeoData.totalEarningsUSD) : 0
+    const totalEarningsUSD = (zoraTotalEarningsUSD + rodeoTotalEarningsUSD).toFixed(2)
     
     // Collect unique addresses across both platforms
     const collectorAddresses = new Set<string>()
@@ -117,123 +133,89 @@ export async function GET(req: NextRequest) {
     
     // Combine time-series data for charts
     const timeSeriesData = {
-      daily: {} as { [date: string]: { earnings: number, earningsUSD?: number, count: number } },
-      weekly: {} as { [week: string]: { earnings: number, earningsUSD?: number, count: number } },
-      monthly: {} as { [month: string]: { earnings: number, earningsUSD?: number, count: number } }
+      daily: {} as { [date: string]: { earnings: number; earningsUSD?: number; count: number } },
+      weekly: {} as { [week: string]: { earnings: number; earningsUSD?: number; count: number } },
+      monthly: {} as { [month: string]: { earnings: number; earningsUSD?: number; count: number } }
     }
     
     // Process Zora time data
-    if (zoraData?.salesByTimeframe) {
-      // Process daily data
-      Object.entries(zoraData.salesByTimeframe.daily).forEach(([date, count]) => {
-        if (!timeSeriesData.daily[date]) {
-          timeSeriesData.daily[date] = { earnings: 0, earningsUSD: 0, count: 0 }
+    if (zoraData?.transactions) {
+      zoraData.transactions.forEach((transaction: Transaction) => {
+        const date = new Date(transaction.timestamp)
+        const dateKey = date.toISOString().split('T')[0]
+        const weekKey = `${date.getFullYear()}-W${Math.ceil((date.getDate() + date.getDay()) / 7)}`
+        const monthKey = date.toISOString().slice(0, 7)
+        
+        // Update daily data
+        if (!timeSeriesData.daily[dateKey]) {
+          timeSeriesData.daily[dateKey] = { earnings: 0, earningsUSD: 0, count: 0 }
         }
-        // For this example, we're estimating earnings by dividing total by count
-        const values = Object.values(zoraData.salesByTimeframe.daily) as number[]
-        const sumValues = values.reduce((a, b) => a + b, 0)
+        timeSeriesData.daily[dateKey].earnings += parseFloat(transaction.amount)
+        timeSeriesData.daily[dateKey].earningsUSD = (timeSeriesData.daily[dateKey].earningsUSD || 0) + 
+          (parseFloat(transaction.amountUSD || '0'))
+        timeSeriesData.daily[dateKey].count++
         
-        const dailyEarnings = zoraTotalEarnings * (Number(count)) / sumValues
-        const dailyEarningsUSD = zoraData.totalEarningsUSD ? 
-          (parseFloat(zoraData.totalEarningsUSD) * (Number(count)) / sumValues) : undefined
-        
-        timeSeriesData.daily[date].earnings += dailyEarnings
-        timeSeriesData.daily[date].earningsUSD = (timeSeriesData.daily[date].earningsUSD || 0) + (dailyEarningsUSD || 0)
-        timeSeriesData.daily[date].count += Number(count)
-      })
-      
-      // Process weekly data
-      Object.entries(zoraData.salesByTimeframe.weekly).forEach(([week, count]) => {
-        if (!timeSeriesData.weekly[week]) {
-          timeSeriesData.weekly[week] = { earnings: 0, earningsUSD: 0, count: 0 }
+        // Update weekly data
+        if (!timeSeriesData.weekly[weekKey]) {
+          timeSeriesData.weekly[weekKey] = { earnings: 0, earningsUSD: 0, count: 0 }
         }
-        const values = Object.values(zoraData.salesByTimeframe.weekly) as number[]
-        const sumValues = values.reduce((a, b) => a + b, 0)
+        timeSeriesData.weekly[weekKey].earnings += parseFloat(transaction.amount)
+        timeSeriesData.weekly[weekKey].earningsUSD = (timeSeriesData.weekly[weekKey].earningsUSD || 0) + 
+          (parseFloat(transaction.amountUSD || '0'))
+        timeSeriesData.weekly[weekKey].count++
         
-        const weeklyEarnings = zoraTotalEarnings * (Number(count)) / sumValues
-        const weeklyEarningsUSD = zoraData.totalEarningsUSD ? 
-          (parseFloat(zoraData.totalEarningsUSD) * (Number(count)) / sumValues) : undefined
-        
-        timeSeriesData.weekly[week].earnings += weeklyEarnings
-        timeSeriesData.weekly[week].earningsUSD = (timeSeriesData.weekly[week].earningsUSD || 0) + (weeklyEarningsUSD || 0)
-        timeSeriesData.weekly[week].count += Number(count)
-      })
-      
-      // Process monthly data
-      Object.entries(zoraData.salesByTimeframe.monthly).forEach(([month, count]) => {
-        if (!timeSeriesData.monthly[month]) {
-          timeSeriesData.monthly[month] = { earnings: 0, earningsUSD: 0, count: 0 }
+        // Update monthly data
+        if (!timeSeriesData.monthly[monthKey]) {
+          timeSeriesData.monthly[monthKey] = { earnings: 0, earningsUSD: 0, count: 0 }
         }
-        const values = Object.values(zoraData.salesByTimeframe.monthly) as number[]
-        const sumValues = values.reduce((a, b) => a + b, 0)
-        
-        const monthlyEarnings = zoraTotalEarnings * (Number(count)) / sumValues
-        const monthlyEarningsUSD = zoraData.totalEarningsUSD ? 
-          (parseFloat(zoraData.totalEarningsUSD) * (Number(count)) / sumValues) : undefined
-        
-        timeSeriesData.monthly[month].earnings += monthlyEarnings
-        timeSeriesData.monthly[month].earningsUSD = (timeSeriesData.monthly[month].earningsUSD || 0) + (monthlyEarningsUSD || 0)
-        timeSeriesData.monthly[month].count += Number(count)
+        timeSeriesData.monthly[monthKey].earnings += parseFloat(transaction.amount)
+        timeSeriesData.monthly[monthKey].earningsUSD = (timeSeriesData.monthly[monthKey].earningsUSD || 0) + 
+          (parseFloat(transaction.amountUSD || '0'))
+        timeSeriesData.monthly[monthKey].count++
       })
     }
     
     // Process Rodeo time data
-    if (rodeoData?.postsByTimeframe) {
-      // Process daily data
-      Object.entries(rodeoData.postsByTimeframe.daily).forEach(([date, count]) => {
-        if (!timeSeriesData.daily[date]) {
-          timeSeriesData.daily[date] = { earnings: 0, earningsUSD: 0, count: 0 }
+    if (rodeoData?.transactions) {
+      rodeoData.transactions.forEach((transaction: Transaction) => {
+        const date = new Date(transaction.timestamp)
+        const dateKey = date.toISOString().split('T')[0]
+        const weekKey = `${date.getFullYear()}-W${Math.ceil((date.getDate() + date.getDay()) / 7)}`
+        const monthKey = date.toISOString().slice(0, 7)
+        
+        // Update daily data
+        if (!timeSeriesData.daily[dateKey]) {
+          timeSeriesData.daily[dateKey] = { earnings: 0, earningsUSD: 0, count: 0 }
         }
-        const values = Object.values(rodeoData.postsByTimeframe.daily) as number[]
-        const sumValues = values.reduce((a, b) => a + b, 0)
+        timeSeriesData.daily[dateKey].earnings += parseFloat(transaction.amount)
+        timeSeriesData.daily[dateKey].earningsUSD = (timeSeriesData.daily[dateKey].earningsUSD || 0) + 
+          (parseFloat(transaction.amountUSD || '0'))
+        timeSeriesData.daily[dateKey].count++
         
-        const dailyEarnings = rodeoTotalEarnings * (Number(count)) / sumValues
-        const dailyEarningsUSD = rodeoData.totalEarningsUSD ? 
-          (parseFloat(rodeoData.totalEarningsUSD) * (Number(count)) / sumValues) : undefined
-        
-        timeSeriesData.daily[date].earnings += dailyEarnings
-        timeSeriesData.daily[date].earningsUSD = (timeSeriesData.daily[date].earningsUSD || 0) + (dailyEarningsUSD || 0)
-        timeSeriesData.daily[date].count += Number(count)
-      })
-      
-      // Process weekly data
-      Object.entries(rodeoData.postsByTimeframe.weekly).forEach(([week, count]) => {
-        if (!timeSeriesData.weekly[week]) {
-          timeSeriesData.weekly[week] = { earnings: 0, earningsUSD: 0, count: 0 }
+        // Update weekly data
+        if (!timeSeriesData.weekly[weekKey]) {
+          timeSeriesData.weekly[weekKey] = { earnings: 0, earningsUSD: 0, count: 0 }
         }
-        const values = Object.values(rodeoData.postsByTimeframe.weekly) as number[]
-        const sumValues = values.reduce((a, b) => a + b, 0)
+        timeSeriesData.weekly[weekKey].earnings += parseFloat(transaction.amount)
+        timeSeriesData.weekly[weekKey].earningsUSD = (timeSeriesData.weekly[weekKey].earningsUSD || 0) + 
+          (parseFloat(transaction.amountUSD || '0'))
+        timeSeriesData.weekly[weekKey].count++
         
-        const weeklyEarnings = rodeoTotalEarnings * (Number(count)) / sumValues
-        const weeklyEarningsUSD = rodeoData.totalEarningsUSD ? 
-          (parseFloat(rodeoData.totalEarningsUSD) * (Number(count)) / sumValues) : undefined
-        
-        timeSeriesData.weekly[week].earnings += weeklyEarnings
-        timeSeriesData.weekly[week].earningsUSD = (timeSeriesData.weekly[week].earningsUSD || 0) + (weeklyEarningsUSD || 0)
-        timeSeriesData.weekly[week].count += Number(count)
-      })
-      
-      // Process monthly data
-      Object.entries(rodeoData.postsByTimeframe.monthly).forEach(([month, count]) => {
-        if (!timeSeriesData.monthly[month]) {
-          timeSeriesData.monthly[month] = { earnings: 0, earningsUSD: 0, count: 0 }
+        // Update monthly data
+        if (!timeSeriesData.monthly[monthKey]) {
+          timeSeriesData.monthly[monthKey] = { earnings: 0, earningsUSD: 0, count: 0 }
         }
-        const values = Object.values(rodeoData.postsByTimeframe.monthly) as number[]
-        const sumValues = values.reduce((a, b) => a + b, 0)
-        
-        const monthlyEarnings = rodeoTotalEarnings * (Number(count)) / sumValues
-        const monthlyEarningsUSD = rodeoData.totalEarningsUSD ? 
-          (parseFloat(rodeoData.totalEarningsUSD) * (Number(count)) / sumValues) : undefined
-        
-        timeSeriesData.monthly[month].earnings += monthlyEarnings
-        timeSeriesData.monthly[month].earningsUSD = (timeSeriesData.monthly[month].earningsUSD || 0) + (monthlyEarningsUSD || 0)
-        timeSeriesData.monthly[month].count += Number(count)
+        timeSeriesData.monthly[monthKey].earnings += parseFloat(transaction.amount)
+        timeSeriesData.monthly[monthKey].earningsUSD = (timeSeriesData.monthly[monthKey].earningsUSD || 0) + 
+          (parseFloat(transaction.amountUSD || '0'))
+        timeSeriesData.monthly[monthKey].count++
       })
     }
     
     // Prepare the combined response
     const response: CombinedAnalyticsResponse = {
       totalEarnings,
+      totalEarningsUSD,
       totalCollectors,
       totalTraders,
       collectorToTraderRatio,
@@ -241,7 +223,9 @@ export async function GET(req: NextRequest) {
       platforms: {
         zora: {
           totalEarnings: zoraData?.totalEarnings || '0',
+          totalEarningsUSD: zoraData?.totalEarningsUSD,
           averageEarning: zoraData?.averageEarningPerSale || '0',
+          averageEarningUSD: zoraData?.averageEarningPerSaleUSD,
           collectors: zoraData?.collectors?.length || 0,
           traders: zoraData?.traders?.length || 0,
           salesByTimeframe: zoraData?.salesByTimeframe || {
@@ -252,7 +236,9 @@ export async function GET(req: NextRequest) {
         },
         rodeo: {
           totalEarnings: rodeoData?.totalEarnings || '0',
+          totalEarningsUSD: rodeoData?.totalEarningsUSD,
           averageEarning: rodeoData?.averageEarningPerPost || '0',
+          averageEarningUSD: rodeoData?.averageEarningPerPostUSD,
           totalPosts: rodeoData?.totalPosts || 0,
           collectors: rodeoData?.collectors?.length || 0,
           traders: rodeoData?.traders?.length || 0,
