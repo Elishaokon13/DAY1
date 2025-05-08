@@ -14,7 +14,9 @@ export function ShareButton({ displayName }: ShareButtonProps) {
   const [isMobile, setIsMobile] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   // Storage preference - 'data-url', 'local', 'blob', or 'mock'
-  const [storageOption] = useState<'data-url' | 'local' | 'blob' | 'mock'>('data-url');
+  const [storageOption] = useState<'data-url' | 'local' | 'blob' | 'mock'>('local');
+  // Platform to share to - 'twitter' or 'farcaster'
+  const [platform, setPlatform] = useState<'twitter' | 'farcaster'>('twitter');
 
   // Detect if user is on mobile device
   useEffect(() => {
@@ -57,14 +59,14 @@ export function ShareButton({ displayName }: ShareButtonProps) {
         }
       });
       
-      // If using data-url approach, we can skip the upload
-      if (storageOption === 'data-url') {
+      // If using data-url approach and sharing to Farcaster, we can skip the upload
+      if (storageOption === 'data-url' && platform === 'farcaster') {
         setImageUrl(dataUrl);
         setStatus('ready');
         return;
       }
       
-      // For other options, upload to server
+      // For Twitter, we need a public URL, so we'll upload to server
       setStatus('uploading');
 
       const saveRes = await fetch("/api/save-image", {
@@ -75,7 +77,7 @@ export function ShareButton({ displayName }: ShareButtonProps) {
         body: JSON.stringify({ 
           displayName,
           imageData: dataUrl,
-          storageOption
+          storageOption: platform === 'twitter' ? 'local' : storageOption // For Twitter, we need a public URL
         }),
       });
   
@@ -105,29 +107,41 @@ export function ShareButton({ displayName }: ShareButtonProps) {
     setStatus('sharing');
     
     try {
-      // URL encode the displayName for the frame URL
+      // URL encode the displayName
       const encodedDisplayName = encodeURIComponent(displayName);
       
-      // Either use the frame URL or create a data URL frame
-      let frameUrl;
-      
-      if (storageOption === 'data-url') {
-        // For data URL approach, we need to pass the image directly to the frame endpoint
-        frameUrl = `${process.env.NEXT_PUBLIC_URL}/frame/${encodedDisplayName}?imageDataUrl=${encodeURIComponent(imageUrl)}`;
-      } else {
-        frameUrl = `${process.env.NEXT_PUBLIC_URL}/frame/${encodedDisplayName}`;
+      if (platform === 'farcaster') {
+        // Either use the frame URL or create a data URL frame
+        let frameUrl;
+        
+        if (storageOption === 'data-url') {
+          // For data URL approach, we need to pass the image directly to the frame endpoint
+          frameUrl = `${process.env.NEXT_PUBLIC_URL}/frame/${encodedDisplayName}?imageDataUrl=${encodeURIComponent(imageUrl)}`;
+        } else {
+          frameUrl = `${process.env.NEXT_PUBLIC_URL}/frame/${encodedDisplayName}`;
+        }
+        
+        await sdk.actions.composeCast({
+          text: "Not financial advice. Just personal branding, this is my Zora Collage, whats yours?",
+          embeds: [frameUrl],
+        });
+      } else if (platform === 'twitter') {
+        // Generate a sharable URL to the public preview page
+        const previewUrl = `${process.env.NEXT_PUBLIC_URL}/frame/${encodedDisplayName}`;
+        
+        // Create Twitter intent URL
+        const tweetText = `Check out my Zora NFT Collage! Made with @zoratoken #ZoraCollage`;
+        const twitterUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(tweetText)}&url=${encodeURIComponent(previewUrl)}`;
+        
+        // Open Twitter intent in a new window
+        window.open(twitterUrl, '_blank');
       }
-      
-      await sdk.actions.composeCast({
-        text: "Not financial advice. Just personal branding, this is my Zora Collage, whats yours?",
-        embeds: [frameUrl],
-      });
       
       setStatus('idle');
     } catch (error) {
-      console.error("❌ Failed to share cast:", error);
+      console.error(`❌ Failed to share to ${platform}:`, error);
       setStatus('error');
-      setErrorMessage('Failed to share to Farcaster');
+      setErrorMessage(`Failed to share to ${platform === 'twitter' ? 'Twitter' : 'Farcaster'}`);
     }
   };
 
@@ -136,8 +150,8 @@ export function ShareButton({ displayName }: ShareButtonProps) {
     switch (status) {
       case 'capturing': return 'Capturing image...';
       case 'uploading': return 'Uploading...';
-      case 'ready': return 'Share to Farcaster';
-      case 'sharing': return 'Opening Farcaster...';
+      case 'ready': return `Share to ${platform === 'twitter' ? 'Twitter' : 'Farcaster'}`;
+      case 'sharing': return `Opening ${platform === 'twitter' ? 'Twitter' : 'Farcaster'}...`;
       case 'error': return 'Try again';
       default: return 'Create Shareable Image';
     }
@@ -152,6 +166,24 @@ export function ShareButton({ displayName }: ShareButtonProps) {
       >
         {getButtonText()}
       </button>
+      
+      {status === 'idle' && (
+        <div className="flex gap-2 mt-2">
+          <button 
+            onClick={() => setPlatform('twitter')}
+            className={`text-xs py-1 px-2 rounded-md ${platform === 'twitter' ? 'bg-blue-500 text-white' : 'bg-gray-700 text-gray-300'}`}
+          >
+            Twitter
+          </button>
+          <button 
+            onClick={() => setPlatform('farcaster')}
+            className={`text-xs py-1 px-2 rounded-md ${platform === 'farcaster' ? 'bg-purple-500 text-white' : 'bg-gray-700 text-gray-300'}`}
+          >
+            Farcaster
+          </button>
+        </div>
+      )}
+      
       {errorMessage && (
         <p className="text-red-500 text-xs mt-1">{errorMessage}</p>
       )}

@@ -9,9 +9,9 @@ export function Collage({ tokens, displayName, selectedToken, setSelectedToken }
   // Dynamic font size calculation based on display name length
   const dynamicFontSize = useMemo(() => {
     const name = displayName || 'name';
-    if (name.length <= 6) return 'text-5xl md:text-6xl lg:text-7xl';
-    if (name.length <= 10) return 'text-4xl md:text-5xl lg:text-6xl';
-    if (name.length <= 15) return 'text-3xl md:text-4xl lg:text-5xl';
+    if (name.length <= 6) return 'text-3xl md:text-4xl lg:text-5xl';
+    if (name.length <= 10) return 'text-2xl md:text-3xl lg:text-4xl';
+    if (name.length <= 15) return 'text-xl md:text-2xl lg:text-3xl';
     if (name.length <= 20) return 'text-2xl md:text-3xl lg:text-4xl';
     return 'text-xl md:text-2xl lg:text-3xl';
   }, [displayName]);
