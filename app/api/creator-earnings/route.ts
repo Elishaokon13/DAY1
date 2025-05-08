@@ -1,6 +1,24 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getProfile, getProfileBalances } from '@zoralabs/coins-sdk'
 
+/**
+ * ZORA Creator Earnings API
+ * 
+ * IMPORTANT: This implementation provides a SIMULATED view of creator earnings.
+ * Limitations:
+ * 1. The Zora SDK's getProfileBalances endpoint returns coin holdings, not transaction history
+ * 2. We don't have access to actual sales data or creator fee payments through this endpoint
+ * 3. Dates, transactions, and collector data are simulated based on current balances
+ * 
+ * For a production implementation, you would need:
+ * - Actual transaction history from blockchain data or an indexer
+ * - Real creator fee payment information
+ * - Historical price data for accurate USD conversion
+ * 
+ * This implementation serves as a demonstration of how earnings data could be displayed
+ * if the actual transaction data were available.
+ */
+
 // Constants
 const CREATOR_FEE_PERCENTAGE = 0.05; // 5% creator fee
 const ZORA_TOKEN_ADDRESS = '0x1111111111166b7FE7bd91427724B487980aFc69'
@@ -92,7 +110,7 @@ type CoinBalancesResponse = {
 // Function to fetch Zora price from DexScreener
 async function getZoraPrice(): Promise<number> {
   try {
-    const response = await fetch('https://api.dexscreener.com/latest/dex/tokens/0x1111111111166b7FE7bd91427724B487980aFc69');
+    const response = await fetch(`https://api.dexscreener.com/latest/dex/tokens/${ZORA_TOKEN_ADDRESS}`);
     const data = await response.json();
     
     if (!data || !data.pairs || !Array.isArray(data.pairs) || data.pairs.length === 0) {
@@ -121,42 +139,123 @@ function convertToUSD(zoraAmount: string, zoraPrice: number): string {
 }
 
 // Function to fetch token transfers from Zora API
-async function getTokenTransfers(address: string) {
+async function getTokenTransfers(address: string, timeframe: string = 'all') {
   try {
-    const response = await getProfileBalances({
-      identifier: address,
-      count: 100, // Get more balances per page
-    })
+    console.log(`Fetching token transfers for ${address} with timeframe: ${timeframe}`)
+    console.log(`Using Zora API URL: ${ZORA_API_URL}`)
+    
+    let allCoins: any[] = [];
+    let cursor = undefined;
+    const pageSize = 50; // Increase page size
+    const MAX_PAGES = 3;  // Limit to prevent excessive API calls
+    let pageCount = 0;
+    
+    // Paginate through balances with limits to prevent excessive API calls
+    do {
+      pageCount++;
+      
+      // Stop after MAX_PAGES to prevent excessive API calls
+      if (pageCount > MAX_PAGES) {
+        console.log(`Reached maximum page count (${MAX_PAGES}). Stopping pagination.`);
+        break;
+      }
+      
+      const response = await getProfileBalances({
+        identifier: address,
+        count: pageSize,
+        after: cursor,
+      });
 
-    const profile = response.data?.profile
-    const balances = profile?.coinBalances as CoinBalancesResponse
-    console.log(`Found ${balances?.edges?.length || 0} coin balances`)
+      const profile = response.data?.profile;
+      if (!profile || !profile.coinBalances?.edges) {
+        console.log('No coin balances found or invalid response structure');
+        break;
+      }
+      
+      const balances = profile.coinBalances;
+      const edges = balances.edges || [];
+      console.log(`Found ${edges.length} coin balances on page ${pageCount}`);
+      
+      // Log the structure of the first balance to understand the data format
+      if (pageCount === 1 && edges.length > 0) {
+        console.log('Example balance structure:', JSON.stringify(edges[0], null, 2));
+      }
+      
+      // Add balances to our collection
+      const pageCoins = edges.map(edge => edge.node);
+      allCoins = [...allCoins, ...pageCoins];
+      
+      // Update cursor for next page
+      cursor = balances.pageInfo?.endCursor;
+      
+      // Break if no more pages
+      if (!balances.pageInfo?.hasNextPage || !cursor || edges.length === 0) {
+        break;
+      }
+      
+    } while (true);
 
-    if (!balances?.edges) {
-      return []
-    }
+    console.log(`Fetched ${allCoins.length} total coin balances (limited to ${MAX_PAGES} pages)`);
+    
+    // Process balances into our token format - limit to a reasonable number for performance
+    const MAX_TOKENS_TO_PROCESS = 100;
+    const tokensToProcess = allCoins.slice(0, MAX_TOKENS_TO_PROCESS);
+    
+    console.log(`Processing ${tokensToProcess.length} tokens out of ${allCoins.length} total`);
+    
+    const tokens = tokensToProcess.map((coin) => {
+      // Extract data from the coin balance structure based on the docs
+      // Note: In a real implementation, you would use blockchain data or an indexer 
+      // to get actual transactions and creator fee payments.
+      
+      // Handle token decimals - most ERC20 tokens use 18 decimals
+      const TOKEN_DECIMALS = 18;
+      
+      // Use correct field paths based on what we see in the logged data
+      // We need to be adaptable here since the API structure might vary
+      let rawBalance = '0';
+      
+      // Try to access the balance from different possible locations based on the API structure
+      if (typeof coin.balance === 'string') {
+        rawBalance = coin.balance;
+      } else if (coin.amount?.amountRaw) {
+        rawBalance = coin.amount.amountRaw;
+      } else if (coin.coin?.balance) {
+        rawBalance = coin.coin.balance;
+      }
+      
+      // Get token name and symbol
+      const tokenName = coin.coin?.name || coin.coin?.symbol || 'Unknown Token';
+      const tokenSymbol = coin.coin?.symbol || 'UNKNOWN';
+      
+      // Convert from raw balance (with decimals) to human-readable amount
+      // For a token with 18 decimals, divide by 10^18
+      const decimalBalance = parseFloat(rawBalance) / Math.pow(10, TOKEN_DECIMALS);
+      
+      console.log(`Token ${tokenName} (${tokenSymbol}): Raw=${rawBalance}, Decimal=${decimalBalance.toFixed(6)}`);
+      
+      return {
+        id: coin.coin?.id || '',
+        name: tokenName,
+        symbol: tokenSymbol,
+        address: coin.coin?.address || '',
+        tokenId: coin.id,
+        transfers: [{
+          id: coin.id,
+          timestamp: new Date().toISOString(), // Since we don't have timestamp in balance
+          type: 'sale', // This is a simulation - we don't know if these were actually sales
+          amount: decimalBalance.toString(), // Use the decimal-adjusted balance
+          from: address,
+          to: address
+        }]
+      };
+    });
 
-    // Process balances into our token format
-    const tokens = balances.edges.map(({ node }) => ({
-      id: node.coin?.id || '',
-      name: node.coin?.name || '',
-      address: node.coin?.address || '',
-      tokenId: node.id,
-      transfers: [{
-        id: node.id,
-        timestamp: new Date().toISOString(), // Since we don't have timestamp in balance
-        type: 'sale',
-        amount: node.balance,
-        from: address,
-        to: address
-      }]
-    }))
-
-    console.log('Processed tokens:', tokens.length)
-    return tokens
+    console.log('Processed tokens:', tokens.length);
+    return tokens;
   } catch (error) {
-    console.error('Failed to fetch token transfers:', error)
-    return []
+    console.error('Failed to fetch token transfers:', error);
+    return [];
   }
 }
 
@@ -170,36 +269,61 @@ export async function GET(req: NextRequest) {
 
   const cleanHandle = handle.trim().replace(/^@/, '')
 
+  // Generate a response with proper caching headers
+  const createCachedResponse = (data: any, status = 200) => {
+    const response = NextResponse.json(data, { status });
+    
+    // Cache successful responses for 15 minutes, error responses for 5 minutes
+    const maxAge = status === 200 ? 60 * 15 : 60 * 5;
+    response.headers.set('Cache-Control', `public, s-maxage=${maxAge}, stale-while-revalidate=60`);
+    
+    return response;
+  };
+
   try {
     // Fetch Zora price first
     const zoraPrice = await getZoraPrice()
     console.log('Current Zora price:', zoraPrice, 'USD')
 
     // Fetch profile data from Zora
-    const profileRes = await getProfile({ identifier: cleanHandle })
+    const profileRes = await getProfile({ 
+      identifier: cleanHandle 
+    })
+    
     const profileData = profileRes?.data?.profile
+    console.log('Profile data fetched:', profileData ? 'success' : 'not found')
 
     if (!profileData) {
       console.log('Zora profile not found')
       return NextResponse.json({ error: 'Zora profile not found' }, { status: 404 })
     }
 
+    // Extract profile information
     const displayName = profileData.displayName || profileData.handle || cleanHandle
     const profileImage = profileData.avatar?.medium || null
     const profileHandle = profileData.handle
-
+    
+    // Log profile details for debugging
+    console.log('Profile Details:');
+    console.log('- Handle:', profileData.handle);
+    console.log('- Display Name:', profileData.displayName);
+    if (profileData.bio) console.log('- Bio:', profileData.bio);
+    
     // Get creator's wallet address
     const creatorAddress = profileData.publicWallet?.walletAddress
     if (!creatorAddress) {
       console.log('Creator wallet address not found')
       return NextResponse.json({ error: 'Creator wallet address not found' }, { status: 404 })
     }
+    
+    console.log('Using wallet address:', creatorAddress)
 
     // Fetch token transfers for the creator
-    const tokens = await getTokenTransfers(creatorAddress)
+    const tokens = await getTokenTransfers(creatorAddress, timeframe)
     console.log('Found', tokens.length, 'tokens')
 
     // Process transfers to calculate earnings
+    // IMPORTANT: This is a simulation based on current holdings, not actual transaction history
     const transactions: Transaction[] = []
     const collectorMap = new Map<string, { tokensPurchased: number, isTrader: boolean }>()
     const salesByTimeframe = {
@@ -211,13 +335,24 @@ export async function GET(req: NextRequest) {
     let totalEarnings = 0
     let totalSales = 0
 
-    tokens.forEach((token: any) => {
-      token.transfers.forEach((transfer: any) => {
+    tokens.forEach((token: Token) => {
+      token.transfers.forEach((transfer: TokenTransfer) => {
         if (transfer.type === 'sale') {
+          // For each balance, we'll estimate creator earnings based on the token balance
+          // Note: This is an estimation as we don't have transaction history
           const creatorEarnings = (parseFloat(transfer.amount) * CREATOR_FEE_PERCENTAGE).toString()
           const creatorEarningsUSD = convertToUSD(creatorEarnings, zoraPrice)
           
-          const saleDate = new Date(transfer.timestamp)
+          // Generate a simulated date based on the token/balance
+          // Since coinBalances don't come with timestamps, we'll create evenly distributed dates
+          // This is just for demonstration - in a real app, you'd need transaction history
+          const oneMonthAgo = new Date();
+          oneMonthAgo.setMonth(oneMonthAgo.getMonth() - 1);
+          const daysBack = Math.floor(Math.random() * 30); // Distribute fake transactions over last month
+          const saleDate = new Date(oneMonthAgo);
+          saleDate.setDate(saleDate.getDate() + daysBack);
+          
+          // Format dates for the timeframes
           const dateKey = saleDate.toISOString().split('T')[0]
           const weekKey = `${saleDate.getFullYear()}-W${Math.ceil((saleDate.getDate() + saleDate.getDay()) / 7)}`
           const monthKey = saleDate.toISOString().slice(0, 7)
@@ -227,10 +362,10 @@ export async function GET(req: NextRequest) {
           salesByTimeframe.weekly[weekKey] = (salesByTimeframe.weekly[weekKey] || 0) + 1
           salesByTimeframe.monthly[monthKey] = (salesByTimeframe.monthly[monthKey] || 0) + 1
 
-          // Add transaction
+          // Add transaction with enhanced data
           transactions.push({
             id: transfer.id,
-            timestamp: transfer.timestamp,
+            timestamp: saleDate.toISOString(), // Using our simulated date
             type: 'sale',
             amount: creatorEarnings,
             amountUSD: creatorEarningsUSD,
@@ -240,10 +375,12 @@ export async function GET(req: NextRequest) {
             sellerAddress: transfer.from
           })
 
-          // Update collector data
-          const buyerData = collectorMap.get(transfer.to) || { tokensPurchased: 0, isTrader: false }
+          // For demonstration, we'll simulate some collectors based on the token info
+          // In a real app, you'd need to fetch actual transaction history to know who bought from you
+          const simulatedBuyerAddress = `0x${token.id.substring(0, 16)}${Math.floor(Math.random() * 1000)}`
+          const buyerData = collectorMap.get(simulatedBuyerAddress) || { tokensPurchased: 0, isTrader: Math.random() > 0.7 }
           buyerData.tokensPurchased++
-          collectorMap.set(transfer.to, buyerData)
+          collectorMap.set(simulatedBuyerAddress, buyerData)
 
           totalEarnings += parseFloat(creatorEarnings)
           totalSales++
@@ -282,16 +419,18 @@ export async function GET(req: NextRequest) {
       profileHandle
     }
 
-    return NextResponse.json(response)
+    // Return the cached response
+    return createCachedResponse(response);
   } catch (error) {
     console.error('Zora API error:', error)
-    return NextResponse.json({ 
+    return createCachedResponse({ 
       error: 'Failed to fetch creator earnings from Zora',
+      errorDetails: 'Note: This API provides a simulation of potential earnings based on current holdings, not actual sales data.',
       totalEarnings: '0',
       transactions: [],
       collectors: [],
       traders: [],
       displayName: cleanHandle
-    }, { status: 500 })
+    }, 500);
   }
 } 

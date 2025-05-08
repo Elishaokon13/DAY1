@@ -1,5 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server'
 
+/**
+ * Combined Analytics API
+ * 
+ * IMPORTANT: This API integrates data from both Zora and Rodeo platforms,
+ * but relies on simulated earnings data rather than actual transaction history.
+ * 
+ * Limitations:
+ * 1. The Zora SDK doesn't provide creator fee payment or sales history
+ * 2. We're estimating earnings based on current token holdings
+ * 3. Dates, transactions, and collector data are simulated
+ * 
+ * This implementation provides a demonstration of how a multi-platform
+ * analytics dashboard could work if actual earnings data were available.
+ */
+
 export type CombinedAnalyticsResponse = {
   // Overall earnings
   totalEarnings: string
@@ -79,16 +94,53 @@ export async function GET(req: NextRequest) {
     )
   }
   
+  // Create a cached response helper
+  const createCachedResponse = (data: any, status = 200) => {
+    const response = NextResponse.json(data, { status });
+    
+    // Cache successful responses for 15 minutes, error responses for 5 minutes
+    const maxAge = status === 200 ? 60 * 15 : 60 * 5;
+    response.headers.set('Cache-Control', `public, s-maxage=${maxAge}, stale-while-revalidate=60`);
+    
+    return response;
+  };
+  
   try {
-    // Fetch data from both platforms in parallel
+    // Set up fetch with timeout to prevent hanging requests
+    const fetchWithTimeout = async (url: string, options: RequestInit = {}, timeout = 15000) => {
+      const controller = new AbortController();
+      const id = setTimeout(() => controller.abort(), timeout);
+      
+      try {
+        const response = await fetch(url, {
+          ...options,
+          signal: controller.signal
+        });
+        clearTimeout(id);
+        return response;
+      } catch (error) {
+        clearTimeout(id);
+        throw error;
+      }
+    };
+    
+    // Fetch data from both platforms in parallel with timeout handling
     const zoraPromise = zoraHandle 
-      ? fetch(`${req.nextUrl.origin}/api/creator-earnings?handle=${encodeURIComponent(zoraHandle)}&timeframe=${timeframe}`)
+      ? fetchWithTimeout(`${req.nextUrl.origin}/api/creator-earnings?handle=${encodeURIComponent(zoraHandle)}&timeframe=${timeframe}`)
           .then(res => res.json())
+          .catch(err => {
+            console.warn(`Error fetching Zora data: ${err.message}`);
+            return null;
+          })
       : Promise.resolve(null)
       
     const rodeoPromise = rodeoUsername
-      ? fetch(`${req.nextUrl.origin}/api/rodeo-earnings?username=${encodeURIComponent(rodeoUsername)}&timeframe=${timeframe}`)
+      ? fetchWithTimeout(`${req.nextUrl.origin}/api/rodeo-earnings?username=${encodeURIComponent(rodeoUsername)}&timeframe=${timeframe}`)
           .then(res => res.json())
+          .catch(err => {
+            console.warn(`Error fetching Rodeo data: ${err.message}`);
+            return null;
+          })
       : Promise.resolve(null)
     
     const [zoraData, rodeoData] = await Promise.all([zoraPromise, rodeoPromise])
@@ -260,11 +312,13 @@ export async function GET(req: NextRequest) {
       }
     }
     
-    return NextResponse.json(response)
+    // Use the cached response helper
+    return createCachedResponse(response);
   } catch (error) {
     console.error('Analytics API error:', error)
-    return NextResponse.json({
+    return createCachedResponse({
       error: 'Failed to fetch analytics data',
+      errorDetails: error instanceof Error ? error.message : String(error),
       totalEarnings: '0',
       totalCollectors: 0,
       totalTraders: 0,
@@ -275,6 +329,6 @@ export async function GET(req: NextRequest) {
       },
       timeSeriesData: { daily: {}, weekly: {}, monthly: {} },
       user: {}
-    }, { status: 500 })
+    }, 500);
   }
 } 
