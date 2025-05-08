@@ -15,7 +15,10 @@ export async function GET(req: NextRequest) {
   try {
     const [profileRes, balancesRes] = await Promise.all([
       getProfile({ identifier: cleanHandle }),
-      getProfileBalances({ identifier: cleanHandle }),
+      getProfileBalances({ 
+        identifier: cleanHandle,
+        count: 25 // Request more tokens to ensure we get at least 10 with images
+      }),
     ])
 
 
@@ -48,13 +51,17 @@ export async function GET(req: NextRequest) {
       .sort((a, b) => 
         Number(b.balance || 0) - Number(a.balance || 0)
       )
-      .slice(0, 5)
+      .slice(0, 10) // Increase from 5 to 10 tokens
 
     const tokens = topTokens.map(({ coin, balance }) => ({
       address: coin?.address || '',
       name: coin?.name || 'Unknown Token',
       symbol: coin?.symbol || '???',
-      imageUrl: coin?.mediaContent?.previewImage || '/placeholder.svg',
+      imageUrl: {
+        // Use the correct nested structure for image URLs
+        small: coin?.mediaContent?.previewImage?.small || '/placeholder.svg',
+        medium: coin?.mediaContent?.previewImage?.medium || '/placeholder.svg'
+      },
       balance,
     }))
 

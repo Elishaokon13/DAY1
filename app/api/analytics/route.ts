@@ -70,18 +70,6 @@ export type CombinedAnalyticsResponse = {
   }
 }
 
-// Define collector interface for type safety
-interface Collector {
-  address: string
-  isTrader: boolean
-}
-
-interface Transaction {
-  timestamp: string;
-  amount: string;
-  amountUSD?: string;
-}
-
 export async function GET(req: NextRequest) {
   const zoraHandle = req.nextUrl.searchParams.get('zora')
   const rodeoUsername = req.nextUrl.searchParams.get('rodeo')
@@ -95,6 +83,7 @@ export async function GET(req: NextRequest) {
   }
   
   // Create a cached response helper
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const createCachedResponse = (data: any, status = 200) => {
     const response = NextResponse.json(data, { status });
     
@@ -160,7 +149,8 @@ export async function GET(req: NextRequest) {
     const traderAddresses = new Set<string>()
     
     if (zoraData?.collectors) {
-      zoraData.collectors.forEach((collector: Collector) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      zoraData.collectors.forEach((collector: any) => {
         collectorAddresses.add(collector.address)
         if (collector.isTrader) {
           traderAddresses.add(collector.address)
@@ -169,7 +159,8 @@ export async function GET(req: NextRequest) {
     }
     
     if (rodeoData?.collectors) {
-      rodeoData.collectors.forEach((collector: Collector) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      rodeoData.collectors.forEach((collector: any) => {
         collectorAddresses.add(collector.address)
         if (collector.isTrader) {
           traderAddresses.add(collector.address)
@@ -192,7 +183,8 @@ export async function GET(req: NextRequest) {
     
     // Process Zora time data
     if (zoraData?.transactions) {
-      zoraData.transactions.forEach((transaction: Transaction) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      zoraData.transactions.forEach((transaction: any) => {
         const date = new Date(transaction.timestamp)
         const dateKey = date.toISOString().split('T')[0]
         const weekKey = `${date.getFullYear()}-W${Math.ceil((date.getDate() + date.getDay()) / 7)}`
@@ -229,7 +221,8 @@ export async function GET(req: NextRequest) {
     
     // Process Rodeo time data
     if (rodeoData?.transactions) {
-      rodeoData.transactions.forEach((transaction: Transaction) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      rodeoData.transactions.forEach((transaction: any) => {
         const date = new Date(transaction.timestamp)
         const dateKey = date.toISOString().split('T')[0]
         const weekKey = `${date.getFullYear()}-W${Math.ceil((date.getDate() + date.getDay()) / 7)}`

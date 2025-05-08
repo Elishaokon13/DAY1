@@ -10,9 +10,11 @@ interface ShareButtonProps {
 
 export function ShareButton({ displayName }: ShareButtonProps) {
   const [status, setStatus] = useState<'idle' | 'capturing' | 'uploading' | 'ready' | 'sharing' | 'error'>('idle');
-  const [blobUrl, setBlobUrl] = useState<string | null>(null);
+  const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [isMobile, setIsMobile] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  // Storage preference - 'data-url', 'local', 'blob', or 'mock'
+  const [storageOption] = useState<'data-url' | 'local' | 'blob' | 'mock'>('data-url');
 
   // Detect if user is on mobile device
   useEffect(() => {
@@ -55,7 +57,14 @@ export function ShareButton({ displayName }: ShareButtonProps) {
         }
       });
       
-      // Upload to server
+      // If using data-url approach, we can skip the upload
+      if (storageOption === 'data-url') {
+        setImageUrl(dataUrl);
+        setStatus('ready');
+        return;
+      }
+      
+      // For other options, upload to server
       setStatus('uploading');
 
       const saveRes = await fetch("/api/save-image", {
@@ -65,7 +74,8 @@ export function ShareButton({ displayName }: ShareButtonProps) {
         },
         body: JSON.stringify({ 
           displayName,
-          imageData: dataUrl 
+          imageData: dataUrl,
+          storageOption
         }),
       });
   
@@ -75,10 +85,10 @@ export function ShareButton({ displayName }: ShareButtonProps) {
       }
   
       const { blobUrl } = await saveRes.json();
-      console.log("✅ Blob URL:", blobUrl);
+      console.log("✅ Image URL:", blobUrl);
       
       // Set state to ready for sharing
-      setBlobUrl(blobUrl);
+      setImageUrl(blobUrl);
       setStatus('ready');
     } catch (error) {
       console.error("❌ Failed to capture and save image:", error);
@@ -88,7 +98,7 @@ export function ShareButton({ displayName }: ShareButtonProps) {
   };
 
   const handleShare = async () => {
-    if (!blobUrl) {
+    if (!imageUrl) {
       return await captureAndSaveImage();
     }
     
@@ -97,7 +107,16 @@ export function ShareButton({ displayName }: ShareButtonProps) {
     try {
       // URL encode the displayName for the frame URL
       const encodedDisplayName = encodeURIComponent(displayName);
-      const frameUrl = `${process.env.NEXT_PUBLIC_URL}/frame/${encodedDisplayName}`;
+      
+      // Either use the frame URL or create a data URL frame
+      let frameUrl;
+      
+      if (storageOption === 'data-url') {
+        // For data URL approach, we need to pass the image directly to the frame endpoint
+        frameUrl = `${process.env.NEXT_PUBLIC_URL}/frame/${encodedDisplayName}?imageDataUrl=${encodeURIComponent(imageUrl)}`;
+      } else {
+        frameUrl = `${process.env.NEXT_PUBLIC_URL}/frame/${encodedDisplayName}`;
+      }
       
       await sdk.actions.composeCast({
         text: "Not financial advice. Just personal branding, this is my Zora Collage, whats yours?",

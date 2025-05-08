@@ -6,23 +6,8 @@ import {
   YAxis,
   CartesianGrid,
   Tooltip,
-  Legend,
   ResponsiveContainer,
 } from 'recharts';
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-
-interface PlatformData {
-  totalEarnings: string;
-  totalEarningsUSD?: string;
-  averageEarning: string;
-  averageEarningUSD?: string;
-  collectors: number;
-  traders: number;
-}
-
-interface RodeoData extends PlatformData {
-  totalPosts: number;
-}
 
 interface PlatformBreakdownProps {
   data: {
@@ -44,21 +29,6 @@ interface PlatformBreakdownProps {
       traders: number
     }
   }
-}
-
-// Interface for tooltip props
-interface CustomTooltipProps {
-  active?: boolean;
-  payload?: Array<{
-    name: string;
-    value: number;
-    color: string;
-    payload: {
-      earningsUSD?: number;
-      averageUSD?: number;
-    };
-  }>;
-  label?: string;
 }
 
 export function PlatformBreakdown({ data }: PlatformBreakdownProps) {

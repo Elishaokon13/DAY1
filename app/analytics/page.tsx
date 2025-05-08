@@ -4,8 +4,8 @@ import { useState } from 'react';
 import { Button } from "@/components/ui/button";
 import { Dashboard } from "@/components/analytics/Dashboard";
 
-// Import the AnalyticsData type from Dashboard component
-import type { AnalyticsData } from "@/components/analytics/Dashboard";
+// Import the AnalyticsData type from the types directory
+import type { AnalyticsData } from "@/types/analytics";
 
 export default function AnalyticsPage() {
   const [zoraHandle, setZoraHandle] = useState('');
@@ -129,7 +129,7 @@ export default function AnalyticsPage() {
               <Button
                 variant="outline"
                 onClick={() => setAnalyticsData(null)}
-                className="text-sm px-4 py-2"
+                className="text-sm text-black px-4 py-2"
               >
                 Search Another Creator
               </Button>

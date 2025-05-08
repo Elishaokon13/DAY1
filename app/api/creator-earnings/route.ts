@@ -72,41 +72,6 @@ type TokenTransfer = {
   to: string
 }
 
-type Token = {
-  id: string
-  name: string
-  address: string
-  transfers: TokenTransfer[]
-}
-
-// Define types for Zora API responses
-type CoinBalance = {
-  balance: string
-  id: string
-  coin?: {
-    id: string
-    name: string
-    description: string
-    address: string
-    symbol: string
-    totalSupply: string
-    totalVolume: string
-    volume24h: string
-    uniqueHolders: number
-  }
-}
-
-type CoinBalancesResponse = {
-  count: number
-  edges: Array<{
-    node: CoinBalance
-  }>
-  pageInfo: {
-    hasNextPage: boolean
-    endCursor?: string
-  }
-}
-
 // Function to fetch Zora price from DexScreener
 async function getZoraPrice(): Promise<number> {
   try {
@@ -144,6 +109,7 @@ async function getTokenTransfers(address: string, timeframe: string = 'all') {
     console.log(`Fetching token transfers for ${address} with timeframe: ${timeframe}`)
     console.log(`Using Zora API URL: ${ZORA_API_URL}`)
     
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     let allCoins: any[] = [];
     let cursor = undefined;
     const pageSize = 50; // Increase page size
@@ -270,6 +236,7 @@ export async function GET(req: NextRequest) {
   const cleanHandle = handle.trim().replace(/^@/, '')
 
   // Generate a response with proper caching headers
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const createCachedResponse = (data: any, status = 200) => {
     const response = NextResponse.json(data, { status });
     
@@ -335,7 +302,8 @@ export async function GET(req: NextRequest) {
     let totalEarnings = 0
     let totalSales = 0
 
-    tokens.forEach((token: Token) => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    tokens.forEach((token: any) => {
       token.transfers.forEach((transfer: TokenTransfer) => {
         if (transfer.type === 'sale') {
           // For each balance, we'll estimate creator earnings based on the token balance

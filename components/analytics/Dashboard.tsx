@@ -1,20 +1,11 @@
 import React from 'react';
-import Image from 'next/image';
-import { StatCard } from './StatCard';
 import { EarningsChart } from './EarningsChart';
-import { CollectorTraderChart } from './CollectorTraderChart';
 import { PlatformBreakdown } from './PlatformBreakdown';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { AnalyticsData } from "@/types/analytics"
 
 // Import icons
-import {
-  DollarSign,
-  Users,
-  TrendingUp,
-  BarChart2,
-} from 'lucide-react';
 
 interface DashboardProps {
   analyticsData: AnalyticsData;
@@ -33,13 +24,8 @@ export function Dashboard({ analyticsData }: DashboardProps) {
   } = analyticsData;
 
   // Format earnings to 2 decimal places
-  const formattedEarnings = parseFloat(totalEarnings).toFixed(2);
-  const formattedEarningsUSD = totalEarningsUSD ? `($${totalEarningsUSD})` : '';
   
   // Calculate percentage of traders
-  const traderPercentage = totalCollectors > 0
-    ? (totalTraders / totalCollectors) * 100
-    : 0;
 
   return (
     <div className="space-y-6 p-4 md:p-6 max-w-7xl mx-auto">
